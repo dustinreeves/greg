@@ -33,6 +33,18 @@ def retrieveglobalconf(args):
     print(c.config_filename_global)
 
 
+def tui(args):
+    """
+    Open the curses interface
+    """
+    try:
+        import greg.tui as gtui
+    except ImportError:
+        sys.exit("The curses interface needs curses; on Windows, "
+                 "run: pip install windows-curses")
+    gtui.run(args)
+
+
 def add(args):
     """
     Add a new feed
@@ -149,7 +161,6 @@ def sync(args):
     """
     Implement the 'greg sync' command
     """
-    import operator
     session = c.Session(args)
     if "all" in args["names"]:
         targetfeeds = session.list_feeds()
@@ -162,34 +173,44 @@ def sync(args):
             else:
                 targetfeeds.append(name)
     for target in targetfeeds:
-        feed = c.Feed(session, target, None)
-        if not feed.wentwrong:
-            try:
-                title = feed.podcast.target.title
-            except AttributeError:
-                title = target
-            print("Checking", title, end="...\n")
-            currentdate, stop = feed.how_many()
-            entrycounter = 0
-            entries_to_download = feed.podcast.entries
-            for entry in entries_to_download:
-                feed.fix_linkdate(entry)
-            # Sort entries_to_download, but only if you want to download as
-            # many as there are
-            if stop >= len(entries_to_download):
-                entries_to_download.sort(key=operator.attrgetter("linkdate"),
-                                         reverse=False)
-            for entry in entries_to_download:
-                if entry.linkdate > currentdate:
-                    downloaded = feed.download_entry(entry)
-                    entrycounter += downloaded
-                if entrycounter >= stop:
-                    break
-            print("Done")
-        else:
-            msg = ''.join(["I cannot sync ", target, " just now: ",
-                feed.wentwrong])
-            print(msg, file=sys.stderr, flush=True)
+        try:
+            sync_feed(session, target)
+        except Exception as e:
+            # one broken feed must not stop the others
+            print("Problem syncing {}: {}: {}".format(
+                target, type(e).__name__, e), file=sys.stderr, flush=True)
+
+
+def sync_feed(session, target):
+    import operator
+    feed = c.Feed(session, target, None)
+    if feed.wentwrong:
+        msg = ''.join(["I cannot sync ", target, " just now: ",
+                       feed.wentwrong])
+        print(msg, file=sys.stderr, flush=True)
+        return
+    try:
+        title = feed.podcast.feed.title
+    except AttributeError:
+        title = target
+    print("Checking", title, end="...\n")
+    currentdate, stop = feed.how_many()
+    entrycounter = 0
+    entries_to_download = feed.podcast.entries
+    for entry in entries_to_download:
+        feed.fix_linkdate(entry)
+    # Sort entries_to_download, but only if you want to download as
+    # many as there are
+    if stop >= len(entries_to_download):
+        entries_to_download.sort(key=operator.attrgetter("linkdate"),
+                                 reverse=False)
+    for entry in entries_to_download:
+        if entry.linkdate > currentdate:
+            downloaded = feed.download_entry(entry)
+            entrycounter += downloaded
+        if entrycounter >= stop:
+            break
+    print("Done")
 
 
 def check(args):
@@ -248,7 +269,7 @@ def download(args):
             "... something went wrong."
             "Are you sure your last ""greg check"" went well?"))
     for number in issues:
-        entry = dump[1].entries[eval(number)]
+        entry = dump[1].entries[int(number)]
         feed.info = []
         feed.entrylinks = []
         feed.fix_linkdate(entry)

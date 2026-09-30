@@ -120,6 +120,10 @@ parser_remove.add_argument('-f', '--force', help='remove without\
                             asking for confirmation', action='store_true')
 parser_remove.set_defaults(func=commands.remove)
 
+# create the parser for the "tui" command
+parser_tui = subparsers.add_parser('tui', help='opens the curses interface')
+parser_tui.set_defaults(func=commands.tui)
+
 # create the parser for the 'retrieveglobalconf' command
 parser_rgc = subparsers.add_parser('retrieveglobalconf', aliases=['rgc'],
                                    help='retrieves the path to the global\

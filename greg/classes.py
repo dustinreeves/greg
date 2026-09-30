@@ -30,14 +30,14 @@ import os.path
 import sys
 import time
 import json
-from pkg_resources import resource_filename
 from urllib.parse import urlparse
 from urllib.error import URLError
 from warnings import warn
 
 import greg.aux_functions as aux
 
-config_filename_global = resource_filename(__name__, 'data/greg.conf')
+config_filename_global = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'data', 'greg.conf')
 
 
 class Session():
@@ -46,7 +46,7 @@ class Session():
         self.config_filename_user = self.retrieve_config_file()
         self.data_dir = self.retrieve_data_directory()
         self.data_filename = os.path.join(self.data_dir, "data")
-        self.feeds = configparser.ConfigParser()
+        self.feeds = configparser.ConfigParser(interpolation=None)
         self.feeds.read(self.data_filename)
         self.config = configparser.ConfigParser()
         self.config.read([config_filename_global, self.config_filename_user])
@@ -55,7 +55,7 @@ class Session():
         """
         Output a list of all feed names
         """
-        feeds = configparser.ConfigParser()
+        feeds = configparser.ConfigParser(interpolation=None)
         feeds.read(self.data_filename)
         return feeds.sections()
 
@@ -309,7 +309,7 @@ class Feed():
                               "option in your greg.conf", file=sys.stderr,
                               flush=True)
         else:
-            downloadlinks[urlparse(entry.link).query.split(
+            downloadlinks[urlparse(entry.link).path.split(
                 "/")[-1]] = entry.link
         for podname in downloadlinks:
             if (podname, entry.linkdate) not in zip(self.entrylinks,
@@ -333,7 +333,12 @@ class Feed():
                     print("Downloading {} -- {}".format(title, podname))
                     aux.download_handler(self, placeholders)
                     if self.willtag:
-                        aux.tag(placeholders)
+                        try:
+                            aux.tag(placeholders)
+                        except Exception as e:
+                            # a tagging failure must not cause a re-download
+                            print("Tagging failed for {}: {}".format(
+                                podname, e), file=sys.stderr, flush=True)
                     downloaded = True
                 else:
                     print("Skipping {} -- {}".format(title, podname))

@@ -28,7 +28,6 @@ import unicodedata
 import string
 import json
 
-from pkg_resources import resource_filename
 import feedparser
 import requests
 
@@ -44,7 +43,8 @@ try:  # beautifulsoup4 is an optional dependency
 except ImportError:
     beautifulsoupexists = False
 
-config_filename_global = resource_filename(__name__, 'data/greg.conf')
+config_filename_global = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'data', 'greg.conf')
 
 # Registering a custom date handler for feedparser
 
@@ -78,6 +78,15 @@ def sanitize(data):
     sanestring = ''.join(x if x.isalnum() else "_" for x in
                          unicodedata.normalize('NFKD', data))
     return sanestring
+
+
+def safe_filename(name, fallback="download"):
+    """
+    Make a string usable as a file name on any platform
+    """
+    name = re.sub(r'[<>:"/\|?*\x00-\x1f]', "_", name)
+    name = name.strip(" .")
+    return name[:200] or fallback
 
 
 def ensure_dir(dirname):
@@ -161,7 +170,7 @@ def parse_for_download(args):
         else:
             extremes = group.split(sep="-")
             list_of_feeds = list_of_feeds + [str(x) for x in range(
-                eval(extremes[0]), eval(extremes[1])+1)]
+                int(extremes[0]), int(extremes[1])+1)]
     return list_of_feeds
 
 
@@ -176,7 +185,8 @@ def tag(placeholders):
     # ... and this is it
 
     # now we create a dictionary of tags and values
-    tagdict = placeholders.feed.defaulttagdict  # these are the defaults
+    # copy, so that substituted values don't leak into the next episode
+    tagdict = dict(placeholders.feed.defaulttagdict)
     try:  # We do as if there was a section with potential tag info
         feedoptions = placeholders.feed.config.options(placeholders.name)
         # this monstruous concatenation of classes... surely a bad idea.
@@ -192,7 +202,11 @@ def tag(placeholders):
         metadata = placeholders.substitute(tagdict[tag])
         tagdict[tag] = metadata
     file_to_tag = eyed3.load(podpath)
-    if file_to_tag.tag == None:
+    if file_to_tag is None:  # not an mp3 (or unreadable): nothing to tag
+        print("Cannot tag {}: not a recognised mp3 file.".format(podpath),
+              file=sys.stderr, flush=True)
+        return
+    if file_to_tag.tag is None:
         file_to_tag.initTag()
     for mytag in tagdict:
         try:
@@ -219,9 +233,8 @@ def get_date(line):
         if 'entrylink' in history and 'linkdate' in history:
             return history['linkdate']
         else:
-            print("Error reading history entry for {}. Contents:"
-                   "{}".format(infofile, history), file=sys.stderr,
-                   flush=True)
+            print("Error reading history entry. Contents: {}".format(history),
+                  file=sys.stderr, flush=True)
             return False
     except json.JSONDecodeError:
         # Ignore JSONDecodeErrors as we'll fall through to our old method
@@ -237,6 +250,13 @@ def download_handler(feed, placeholders):
     """
     value = feed.retrieve_config('downloadhandler', 'greg')
     if value == 'greg':
+        template = feed.retrieve_config(
+            'download_filename',
+            feed.retrieve_config('downloaded_filename', '{filename}'))
+        placeholders.filename = safe_filename(
+            placeholders.substitute(template), placeholders.filename)
+        placeholders.fullpath = os.path.join(
+            placeholders.directory, placeholders.filename)
         with requests.get(placeholders.link) as fin:
             # check if request went ok
             fin.raise_for_status()
@@ -254,8 +274,9 @@ def download_handler(feed, placeholders):
                             part in value_list]
         returncode = subprocess.call(instruction_list)
         if returncode:
-            print("There was a problem with your download handler:"
-                    "{}".format(returncode), file=sys.stderr, flush=True)
+            # Raise, so the episode is not recorded in the history as done
+            raise RuntimeError("download handler failed with exit code "
+                               "{}".format(returncode))
 
 
 
