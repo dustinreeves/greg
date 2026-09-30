@@ -152,7 +152,7 @@ const main = document.getElementById("main");
 async function viewFeeds() {
   const feeds = await api("GET", "feeds");
   const rows = feeds.map(f => h("tr", {},
-    h("td", {}, h("strong", {}, f.name), f.vpn ? h("span", {class: "badge vpn"}, "vpn") : ""),
+    h("td", {}, h("strong", {}, f.name), f.vpn ? h("span", {class: "badge vpn", title: f.proxy || ""}, f.via === "proxy" ? "proxy" : "vpn") : ""),
     h("td", {class: "url"}, f.url, " ",
       h("a", {href: "#", onclick: guard(async e => { e.preventDefault();
         const a = e.target; const r = await api("GET", "feeds/" + encodeURIComponent(f.name) + "/url");
@@ -350,11 +350,14 @@ async function viewStatus() {
       ...s.checks.map(c => h("div", {}, h("span", {class: c.ok ? "ok" : "bad"}, c.ok ? "● " : "✕ "),
         c.kind + " ", h("strong", {}, c.name), " ", h("span", {class: "mute"}, c.detail)))));
     const v = s.vpn;
-    cards.push(h("div", {class: "card"}, h("h3", {}, "VPN route"),
-      v ? (!v.configured ? h("div", {class: "mute"}, "No vpn_prefix configured.") :
-        h("div", {}, h("span", {class: v.ok ? "ok" : "bad"}, v.ok ? "● working: " : "✕ not separated: "),
-          "normal traffic ", h("strong", {}, v.normal || "?"), ", vpn traffic ", h("strong", {}, v.vpn || "no answer")))
-        : h("button", {class: "btn", onclick: guard(() => draw(true))}, "Test VPN route")));
+    cards.push(h("div", {class: "card"}, h("h3", {}, "Proxy / VPN routes"),
+      v ? (!v.configured ? h("div", {class: "mute"}, "No proxy configured (see 'proxy' in greg.conf).") :
+        h("div", {},
+          h("div", {}, "direct: ", h("strong", {}, v.direct || "?")),
+          ...v.routes.map(r => h("div", {}, h("span", {class: r.ok ? "ok" : "bad"}, r.ok ? "● " : "✕ "),
+            r.label + ": ", h("strong", {}, r.ip || "no answer"),
+            r.ok ? "" : h("span", {class: "bad"}, "  not working or not separated")))))
+        : h("button", {class: "btn", onclick: guard(() => draw(true))}, "Test routes")));
     main.replaceChildren(h("div", {class: "mute", style: "margin-bottom:10px"}, "Server time " + s.time), ...cards);
   }
   await draw(false);

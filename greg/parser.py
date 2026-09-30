@@ -124,13 +124,18 @@ parser_remove.set_defaults(func=commands.remove)
 parser_tui = subparsers.add_parser('tui', help='opens the curses interface')
 parser_tui.set_defaults(func=commands.tui)
 
+# create the parser for the "proxytest" command
+parser_pt = subparsers.add_parser(
+    'proxytest', help='checks the configured proxies')
+parser_pt.set_defaults(func=commands.proxytest)
+
 # create the parser for the "web" command
 parser_web = subparsers.add_parser('web', help='starts the web interface')
-parser_web.add_argument('--host', help='address to listen on (default                        127.0.0.1)')
+parser_web.add_argument('--host', help='address to listen on (default 127.0.0.1)')
 parser_web.add_argument('--port', type=int, help='port to listen on')
 parser_web.add_argument('--set-password', action='store_true',
                         help='set the web interface password and exit')
-parser_web.add_argument('--webconfig', help='path of the web settings file                        (default ~/.config/greg/web.json)')
+parser_web.add_argument('--webconfig', help='web settings file (default ~/.config/greg/web.json)')
 parser_web.set_defaults(func=commands.web)
 
 # create the parser for the 'retrieveglobalconf' command

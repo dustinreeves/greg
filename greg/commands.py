@@ -45,6 +45,35 @@ def tui(args):
     gtui.run(args)
 
 
+def proxytest(args):
+    """
+    Show the public address seen directly and through each configured proxy
+    """
+    session = c.Session(args)
+    proxies = []
+    for name in session.list_feeds():
+        pr = aux.proxy_for(session, name, session.feeds[name].get("url", ""))
+        if pr and pr not in proxies:
+            proxies.append(pr)
+    default = session.raw_config.get("DEFAULT", "proxy", fallback="").strip()
+    if default and default not in proxies:
+        proxies.append(default)
+    if not proxies:
+        print("No proxy is configured (see 'proxy' in greg.conf).")
+        return
+    direct = aux.egress_ip()
+    print("direct:".ljust(34), direct)
+    bad = False
+    for pr in proxies:
+        ip = aux.egress_ip(pr)
+        ok = ip and not ip.startswith("error") and ip != direct
+        bad = bad or not ok
+        print(("via " + aux.mask_proxy(pr) + ":").ljust(34), ip,
+              "" if ok else "  <-- NOT working or not separated")
+    if bad:
+        sys.exit(1)
+
+
 def web(args):
     """
     Start the web interface

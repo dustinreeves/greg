@@ -153,7 +153,8 @@ class Greg:
         return url.split("?", 1)[0] + ("?••••"
                                         if "?" in url else "")
 
-    def via_vpn(self, name, url):
+    def needs_wrapper(self, name, url):
+        """Feeds that must run under the (advanced) vpn_prefix wrapper."""
         s = self.settings
         if not s.get("vpn_prefix"):
             return False
@@ -161,6 +162,15 @@ class Greg:
         return name in s.get("vpn_feeds", []) or any(
             host == h or host.endswith("." + h)
             for h in s.get("vpn_hosts", ["patreon.com"]))
+
+    def route(self, session, name, url):
+        """How this feed reaches the internet: proxy, wrapper or direct."""
+        pr = aux.proxy_for(session, name, url)
+        if pr:
+            return "proxy", aux.mask_proxy(pr)
+        if self.needs_wrapper(name, url):
+            return "wrapper", None
+        return None, None
 
     def history(self, session, name):
         return aux.parse_feed_info(os.path.join(session.data_dir, name))
@@ -178,9 +188,11 @@ class Greg:
                                          tuple(max(dates)))
                 except (TypeError, ValueError):
                     last = "unknown"
+            via, detail = self.route(session, name, url)
             out.append({"name": name, "url": self.mask(url),
                         "last": last, "downloaded": len(links),
-                        "vpn": self.via_vpn(name, url),
+                        "vpn": via is not None, "via": via,
+                        "proxy": detail,
                         "date_info": session.feeds[name].get("date_info")})
         return out
 
@@ -535,17 +547,19 @@ def build_steps(greg, action, feeds, ids=None):
     for name in feeds:
         if name not in session.feeds:
             raise KeyError(name)
-        prefix = greg.settings.get("vpn_prefix", []) if greg.via_vpn(
-            name, session.feeds[name].get("url", "")) else []
+        url = session.feeds[name].get("url", "")
+        via, _ = greg.route(session, name, url)
+        # a proxy is applied by greg itself (from greg.conf); only the
+        # advanced wrapper needs a command prefix
+        prefix = greg.settings.get("vpn_prefix", [])             if via == "wrapper" else []
+        note = " (via {})".format(via) if via else ""
         if action == "sync":
             argv = prefix + worker_argv(greg, "sync", name)
-            steps.append(("sync {}{}".format(name, " (via vpn)"
-                                             if prefix else ""), argv, None))
+            steps.append(("sync {}{}".format(name, note), argv, None))
         else:
             argv = prefix + worker_argv(greg, "download", name)
             steps.append(("download {} ({} episodes){}".format(
-                name, len(ids), " (via vpn)" if prefix else ""), argv,
-                json.dumps(ids)))
+                name, len(ids), note), argv, json.dumps(ids)))
     return steps
 
 
@@ -591,22 +605,37 @@ def system_status(greg):
 
 
 def vpn_test(greg):
+    """Public address seen directly and through every configured route."""
+    session = greg.session()
+    routes = []
+    seen = set()
+    for name in session.list_feeds():
+        pr = aux.proxy_for(session, name, session.feeds[name].get("url", ""))
+        if pr and pr not in seen:
+            seen.add(pr)
+            routes.append(("proxy " + aux.mask_proxy(pr), pr, None))
     prefix = greg.settings.get("vpn_prefix")
-    if not prefix:
+    if prefix:
+        routes.append(("wrapper", None, list(prefix)))
+    if not routes:
         return {"configured": False}
 
-    def ip(cmd):
+    def via_wrapper(cmd):
         try:
             r = subprocess.Popen(cmd + ["curl", "-s", "--max-time", "12",
-                                        "https://ifconfig.me"],
+                                        "https://ifconfig.me/ip"],
                                  stdout=subprocess.PIPE,
                                  stderr=subprocess.DEVNULL)
             return r.communicate(timeout=20)[0].decode().strip()
         except Exception:
             return ""
-    normal, vpn = ip([]), ip(list(prefix))
-    return {"configured": True, "normal": normal, "vpn": vpn,
-            "ok": bool(vpn) and vpn != normal}
+    direct = aux.egress_ip()
+    out = []
+    for label, pr, cmd in routes:
+        ip = via_wrapper(cmd) if cmd else aux.egress_ip(pr)
+        ok = bool(ip) and not ip.startswith("error") and ip != direct
+        out.append({"label": label, "ip": ip, "ok": ok})
+    return {"configured": True, "direct": direct, "routes": out}
 
 
 # -- http -----------------------------------------------------------------

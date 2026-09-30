@@ -25,6 +25,7 @@ import sys
 import re
 import time
 import unicodedata
+from urllib.parse import urlparse
 import string
 import json
 
@@ -97,10 +98,84 @@ def ensure_dir(dirname):
             raise
 
 
-def parse_podcast(url):
+def proxy_for(session, name, url):
     """
-    Try to parse podcast
+    Return the proxy url to use for feed `name` (or None for a direct
+    connection). Configuration, in greg.conf:
+
+      proxy       = http://127.0.0.1:8888      (in [DEFAULT] or a feed section)
+      proxy_hosts = patreon.com, example.org   (in [DEFAULT]: only feeds whose
+                                                url is on these hosts use the
+                                                [DEFAULT] proxy)
+
+    A `proxy` set in a feed's own section always applies to that feed; an
+    empty value there forces a direct connection.
     """
+    raw = session.raw_config
+    if raw.has_section(name) and raw.has_option(name, "proxy"):
+        return raw.get(name, "proxy").strip() or None
+    default = raw.get("DEFAULT", "proxy", fallback="").strip()
+    if not default:
+        return None
+    hosts = [h.strip().lower() for h in
+             raw.get("DEFAULT", "proxy_hosts", fallback="").split(",")
+             if h.strip()]
+    if not hosts:
+        return default
+    host = (urlparse(url).hostname or "").lower()
+    if any(host == h or host.endswith("." + h) for h in hosts):
+        return default
+    return None
+
+
+def mask_proxy(proxy):
+    """Hide any user:password in a proxy url, for display."""
+    return re.sub(r"//[^/@]*@", "//***@", proxy or "")
+
+
+def proxy_dict(proxy):
+    return {"http": proxy, "https": proxy} if proxy else None
+
+
+def proxy_env(proxy):
+    """Environment for child processes (wget, curl, yt-dlp, ...)."""
+    env = dict(os.environ)
+    if proxy:
+        for key in ("http_proxy", "https_proxy", "all_proxy"):
+            env[key] = proxy
+            env[key.upper()] = proxy
+    return env
+
+
+def egress_ip(proxy=None):
+    """The public address seen from here, optionally through a proxy."""
+    try:
+        r = requests.get("https://ifconfig.me/ip", timeout=15,
+                         proxies=proxy_dict(proxy))
+        return r.text.strip()
+    except Exception as e:
+        return "error: {}".format(type(e).__name__)
+
+
+def parse_podcast(url, proxy=None):
+    """
+    Try to parse podcast. With `proxy`, the feed is fetched through it.
+    """
+    if proxy:
+        try:
+            resp = requests.get(url, proxies=proxy_dict(proxy), timeout=60,
+                                headers={"User-Agent": "greg"})
+            resp.raise_for_status()
+            podcast = feedparser.parse(resp.content)
+            podcast["href"] = url
+        except Exception as e:
+            podcast = feedparser.FeedParserDict(
+                bozo=1, entries=[], feed=feedparser.FeedParserDict(),
+                bozo_exception=e,
+                proxy_error="{} (via proxy {})".format(
+                    e, mask_proxy(proxy)))
+            print("Error: ", url, ": ", podcast["proxy_error"])
+        return podcast
     try:
         podcast = feedparser.parse(url)
         wentwrong = "urlopen" in str(podcast["bozo_exception"])
@@ -257,7 +332,8 @@ def download_handler(feed, placeholders):
             placeholders.substitute(template), placeholders.filename)
         placeholders.fullpath = os.path.join(
             placeholders.directory, placeholders.filename)
-        with requests.get(placeholders.link) as fin:
+        with requests.get(placeholders.link,
+                          proxies=proxy_dict(feed.proxy)) as fin:
             # check if request went ok
             fin.raise_for_status()
             # check if fullpath allready exists
@@ -272,7 +348,8 @@ def download_handler(feed, placeholders):
         value_list = shlex.split(value)
         instruction_list = [placeholders.substitute(part) for
                             part in value_list]
-        returncode = subprocess.call(instruction_list)
+        returncode = subprocess.call(instruction_list,
+                                     env=proxy_env(feed.proxy))
         if returncode:
             # Raise, so the episode is not recorded in the history as done
             raise RuntimeError("download handler failed with exit code "
