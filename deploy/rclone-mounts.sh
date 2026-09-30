@@ -24,5 +24,5 @@ ensure() {
 }
 
 ensure backblaze:cowardhourstorage /mnt/bb
-ensure backblaze:podcasts-storage  /mnt/podcasts --vfs-cache-mode writes
+ensure backblaze:podcasts-storage  /mnt/podcasts --vfs-cache-mode writes --allow-other
 ensure backblaze:doomscrollstorage /mnt/doomscroll
