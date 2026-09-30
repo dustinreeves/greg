@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>greg</title>
+<style>
+:root {
+  --bg:#f6f7f9; --panel:#fff; --ink:#1b1f24; --mute:#6a737d; --line:#dfe3e8;
+  --accent:#2457d6; --accent-ink:#fff; --ok:#1a7f37; --bad:#c62828; --warn:#9a6700;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg:#0f1216; --panel:#171b21; --ink:#e6e9ee; --mute:#8b949e;
+    --line:#2a313a; --accent:#6d9cff; --accent-ink:#0b1020; --ok:#3fb950;
+    --bad:#ff7b72; --warn:#d29922; }
+}
+* { box-sizing: border-box; }
+a { color: var(--accent); }
+body { margin:0; background:var(--bg); color:var(--ink);
+  font:15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+header { display:flex; align-items:center; gap:16px; padding:10px 16px;
+  background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; flex-wrap:wrap; }
+header h1 { font-size:18px; margin:0; letter-spacing:.5px; }
+nav { display:flex; gap:4px; flex-wrap:wrap; }
+nav button { background:none; border:0; color:var(--mute); padding:6px 12px; border-radius:6px; cursor:pointer; font:inherit; }
+nav button.on { background:var(--bg); color:var(--ink); font-weight:600; }
+#jobdot { margin-left:auto; font-size:13px; color:var(--mute); }
+main { max-width:1100px; margin:0 auto; padding:16px; }
+.bar { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center; }
+button.btn, a.btn { background:var(--panel); color:var(--ink); border:1px solid var(--line);
+  padding:6px 12px; border-radius:6px; cursor:pointer; font:inherit; }
+button.btn:hover { border-color:var(--accent); }
+button.primary { background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+button.danger { color:var(--bad); }
+button:disabled { opacity:.5; cursor:default; }
+table { width:100%; border-collapse:collapse; background:var(--panel);
+  border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+th, td { text-align:left; padding:8px 12px; border-bottom:1px solid var(--line); vertical-align:middle; }
+th { font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--mute); background:var(--bg); }
+tr:last-child td { border-bottom:0; }
+td.url { font-family:var(--mono); font-size:12.5px; color:var(--mute); word-break:break-all; max-width:340px; }
+td.act { white-space:nowrap; text-align:right; }
+td.act button { margin-left:4px; padding:3px 9px; font-size:13px; }
+.badge { font-size:11px; padding:1px 7px; border-radius:10px; border:1px solid var(--line); color:var(--mute); margin-left:6px; }
+.badge.vpn { color:var(--accent); border-color:var(--accent); }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:14px; }
+.card h3 { margin:0 0 8px; font-size:14px; }
+.ok { color:var(--ok); } .bad { color:var(--bad); } .mute { color:var(--mute); } .warn { color:var(--warn); }
+pre.log { background:#0b0e12; color:#d6dbe3; font:12.5px/1.45 var(--mono); padding:12px; border-radius:8px;
+  max-height:60vh; overflow:auto; margin:0; white-space:pre-wrap; word-break:break-word; }
+dialog { border:1px solid var(--line); border-radius:10px; padding:0; background:var(--panel); color:var(--ink);
+  width:min(900px, 96vw); max-height:92vh; }
+dialog::backdrop { background:rgba(0,0,0,.5); }
+.dlg-h { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line); }
+.dlg-h h2 { margin:0; font-size:16px; flex:1; }
+.dlg-b { padding:14px 16px; overflow:auto; max-height:70vh; }
+.dlg-f { padding:10px 16px; border-top:1px solid var(--line); display:flex; gap:8px; justify-content:flex-end; align-items:center; }
+label { display:block; font-size:13px; color:var(--mute); margin:10px 0 3px; }
+input[type=text], input[type=url], input[type=password], select { width:100%; padding:7px 9px; border-radius:6px;
+  border:1px solid var(--line); background:var(--bg); color:var(--ink); font:inherit; }
+.ep { display:flex; gap:10px; padding:5px 4px; border-bottom:1px solid var(--line); align-items:baseline; }
+.ep:hover { background:var(--bg); }
+.ep .t { flex:1; } .ep .d { color:var(--mute); font-size:12.5px; white-space:nowrap; }
+.ep.done .t { color:var(--mute); }
+.hint { font-size:12.5px; color:var(--mute); margin-top:2px; }
+.toast { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); background:var(--ink); color:var(--bg);
+  padding:8px 16px; border-radius:8px; z-index:99; max-width:90vw; }
+.toast.err { background:var(--bad); color:#fff; }
+.grid2 { display:grid; grid-template-columns:1fr 1fr; gap:0 16px; }
+@media (max-width: 700px) {
+  .grid2 { grid-template-columns:1fr; }
+  td.url, th.hide { display:none; }
+  main { padding:10px; }
+}
+meter { width:100%; height:10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>greg</h1>
+  <nav id="nav"></nav>
+  <span id="jobdot"></span>
+</header>
+<main id="main"></main>
+<dialog id="dlg"></dialog>
+
+<script>
+"use strict";
+// ---- helpers: build DOM with text only (feed content is never parsed as HTML)
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, "");
+    else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid == null || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+async function api(method, path, body) {
+  const r = await fetch("/api/" + path, {
+    method, headers: {"X-Greg-Request": "1", "Content-Type": "application/json"},
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  let data = {};
+  try { data = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(data.error || ("HTTP " + r.status));
+  return data;
+}
+function toast(msg, err) {
+  const t = h("div", {class: "toast" + (err ? " err" : "")}, msg);
+  document.body.append(t);
+  setTimeout(() => t.remove(), err ? 6000 : 2500);
+}
+const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { toast(e.message, true); } };
+function bytes(n) {
+  const u = ["B","KB","MB","GB","TB"]; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(i ? 1 : 0) + " " + u[i];
+}
+function ts(t) { return t ? new Date(t * 1000).toLocaleString() : ""; }
+
+// ---- dialog
+const dlg = document.getElementById("dlg");
+function openDialog(title, body, footer) {
+  dlg.replaceChildren(
+    h("div", {class: "dlg-h"}, h("h2", {}, title),
+      h("button", {class: "btn", onclick: () => dlg.close()}, "Close")),
+    h("div", {class: "dlg-b"}, body),
+    footer ? h("div", {class: "dlg-f"}, footer) : "");
+  if (!dlg.open) dlg.showModal();
+}
+
+// ---- tabs
+const tabs = {feeds: "Feeds", jobs: "Jobs", config: "Settings", status: "Status"};
+let current = "feeds", timers = [];
+function go(tab) {
+  current = tab;
+  timers.forEach(clearInterval); timers = [];
+  document.getElementById("nav").replaceChildren(...Object.entries(tabs).map(([k, v]) =>
+    h("button", {class: k === tab ? "on" : "", onclick: () => go(k)}, v)));
+  ({feeds: viewFeeds, jobs: viewJobs, config: viewConfig, status: viewStatus})[tab]();
+}
+const main = document.getElementById("main");
+
+// ---- feeds
+async function viewFeeds() {
+  const feeds = await api("GET", "feeds");
+  const rows = feeds.map(f => h("tr", {},
+    h("td", {}, h("strong", {}, f.name), f.vpn ? h("span", {class: "badge vpn"}, "vpn") : ""),
+    h("td", {class: "url"}, f.url, " ",
+      h("a", {href: "#", onclick: guard(async e => { e.preventDefault();
+        const a = e.target; const r = await api("GET", "feeds/" + encodeURIComponent(f.name) + "/url");
+        a.previousSibling.textContent = r.url + " "; a.remove(); })}, "reveal")),
+    h("td", {}, f.last || h("span", {class: "mute"}, "never")),
+    h("td", {}, String(f.downloaded)),
+    h("td", {class: "act"},
+      h("button", {class: "btn", onclick: () => viewEpisodes(f.name)}, "Episodes"),
+      h("button", {class: "btn", onclick: guard(() => startSync([f.name]))}, "Sync"),
+      h("button", {class: "btn", onclick: () => editFeed(f)}, "Edit"),
+      h("button", {class: "btn danger", onclick: () => removeFeed(f)}, "Remove"))));
+  main.replaceChildren(
+    h("div", {class: "bar"},
+      h("button", {class: "btn primary", onclick: addFeed}, "Add feed"),
+      h("button", {class: "btn", onclick: guard(() => startSync(["all"]))}, "Sync all"),
+      h("span", {class: "mute"}, feeds.length + " feeds")),
+    feeds.length ? h("table", {},
+      h("thead", {}, h("tr", {}, h("th", {}, "Feed"), h("th", {class: "hide"}, "URL"),
+        h("th", {}, "Last download"), h("th", {}, "Seen"), h("th", {}, ""))),
+      h("tbody", {}, rows)) : h("div", {class: "card"}, "No feeds yet. Add one to get started."));
+}
+async function startSync(names) {
+  const j = await api("POST", "jobs", {action: "sync", feeds: names});
+  toast("Started: " + j.label); go("jobs"); showJob(j.id);
+}
+function addFeed() {
+  const name = h("input", {type: "text", placeholder: "e.g. mypodcast", autocomplete: "off"});
+  const url = h("input", {type: "url", placeholder: "https://…", autocomplete: "off"});
+  const from = h("input", {type: "text", placeholder: "YYYY-MM-DD (optional)"});
+  openDialog("Add feed", h("div", {},
+    h("label", {}, "Name"), name,
+    h("div", {class: "hint"}, "Letters, digits, . _ - . Also the download folder name."),
+    h("label", {}, "Feed URL"), url,
+    h("label", {}, "Only download episodes from this date"), from,
+    h("div", {class: "hint"}, "Leave empty to use your firstsync setting.")),
+    h("button", {class: "btn primary", onclick: guard(async () => {
+      await api("POST", "feeds", {name: name.value, url: url.value, downloadfrom: from.value});
+      dlg.close(); toast("Added " + name.value); viewFeeds(); })}, "Add"));
+  name.focus();
+}
+function editFeed(f) {
+  const name = h("input", {type: "text", value: f.name});
+  const url = h("input", {type: "url", placeholder: "leave empty to keep the current url"});
+  const from = h("input", {type: "text", placeholder: "YYYY-MM-DD (optional)"});
+  openDialog("Edit " + f.name, h("div", {},
+    h("label", {}, "Name"), name,
+    h("div", {class: "hint"}, "Renaming keeps the history. Download folders are NOT renamed."),
+    h("label", {}, "New URL"), url,
+    h("label", {}, "Download from date"), from,
+    h("div", {class: "hint"}, "Sets where the next sync starts. Earlier date = backfill, later = skip.")),
+    h("button", {class: "btn primary", onclick: guard(async () => {
+      const b = {};
+      if (url.value) b.url = url.value;
+      if (from.value) b.downloadfrom = from.value;
+      if (name.value !== f.name) b.new_name = name.value;
+      if (!Object.keys(b).length) return dlg.close();
+      await api("PATCH", "feeds/" + encodeURIComponent(f.name), b);
+      dlg.close(); toast("Saved"); viewFeeds(); })}, "Save"));
+}
+function removeFeed(f) {
+  openDialog("Remove " + f.name + "?", h("div", {},
+    h("p", {}, "This removes the feed from greg. Downloaded files are not touched, and the sync history is kept aside so it can be restored.")),
+    [h("button", {class: "btn", onclick: () => dlg.close()}, "Cancel"),
+     h("button", {class: "btn danger", onclick: guard(async () => {
+       await api("DELETE", "feeds/" + encodeURIComponent(f.name));
+       dlg.close(); toast("Removed " + f.name); viewFeeds(); })}, "Remove")]);
+}
+
+// ---- episodes
+async function viewEpisodes(name) {
+  openDialog("Episodes: " + name, h("div", {class: "mute"}, "Fetching feed…"));
+  let data;
+  try { data = await api("GET", "feeds/" + encodeURIComponent(name) + "/episodes"); }
+  catch (e) { return openDialog("Episodes: " + name, h("div", {class: "bad"}, e.message)); }
+  const picked = new Set();
+  const filter = h("input", {type: "text", placeholder: "Filter…"});
+  const list = h("div", {});
+  const count = h("span", {class: "mute"});
+  const dl = h("button", {class: "btn primary", disabled: true, onclick: guard(async () => {
+    const j = await api("POST", "jobs", {action: "download", feeds: [name], ids: [...picked]});
+    dlg.close(); toast("Started: " + j.label); go("jobs"); showJob(j.id); })}, "Download selected");
+  function refresh() {
+    const q = filter.value.toLowerCase();
+    list.replaceChildren(...data.entries.filter(e => !q || e.title.toLowerCase().includes(q)).map(e =>
+      h("label", {class: "ep" + (e.downloaded ? " done" : ""), style: "margin:0;color:inherit;font-size:inherit"},
+        h("input", {type: "checkbox", checked: picked.has(e.id), onchange: ev => {
+          ev.target.checked ? picked.add(e.id) : picked.delete(e.id); upd(); }}),
+        h("span", {class: "t"}, e.title, e.downloaded ? h("span", {class: "badge"}, "downloaded") : ""),
+        h("span", {class: "d"}, (e.date || "").slice(0, 16)))));
+    upd();
+  }
+  function upd() { count.textContent = picked.size + " selected of " + data.entries.length;
+    dl.disabled = !picked.size; }
+  filter.addEventListener("input", refresh);
+  openDialog((data.title || name) + " (" + data.entries.length + ")",
+    h("div", {}, data.error ? h("div", {class: "warn"}, data.error) : "", filter, h("div", {style: "height:8px"}), list),
+    [count,
+     h("button", {class: "btn", onclick: () => { data.entries.filter(e => !e.downloaded).forEach(e => picked.add(e.id)); refresh(); }}, "Select not downloaded"),
+     h("button", {class: "btn", onclick: () => { picked.clear(); refresh(); }}, "Clear"), dl]);
+  refresh();
+}
+
+// ---- jobs
+let openJob = null;
+async function viewJobs() {
+  async function draw() {
+    const jobs = await api("GET", "jobs");
+    const box = h("div", {});
+    box.append(jobs.length ? h("table", {},
+      h("thead", {}, h("tr", {}, h("th", {}, "Job"), h("th", {}, "Status"), h("th", {}, "Started"), h("th", {}, ""))),
+      h("tbody", {}, jobs.map(j => h("tr", {},
+        h("td", {}, j.label),
+        h("td", {class: {done: "ok", failed: "bad", cancelled: "mute"}[j.status] || ""}, j.status),
+        h("td", {}, ts(j.started || j.created)),
+        h("td", {class: "act"},
+          h("button", {class: "btn", onclick: () => showJob(j.id)}, "Log"),
+          (j.status === "queued" || j.status === "running") ?
+            h("button", {class: "btn danger", onclick: guard(async () => { await api("POST", "jobs/" + j.id + "/cancel"); draw(); })}, "Cancel") : "")))))
+      : h("div", {class: "card mute"}, "No jobs yet. Start a sync from the Feeds tab."));
+    const logbox = h("div", {id: "logbox", style: "margin-top:14px"});
+    main.replaceChildren(box, logbox);
+    if (openJob) showJob(openJob, true);
+  }
+  await draw();
+  timers.push(setInterval(() => { if (current === "jobs" && !openJob) draw().catch(() => {}); }, 4000));
+}
+let logTimer = null;
+function showJob(id) {
+  if (current !== "jobs") { go("jobs"); }
+  openJob = id;
+  clearInterval(logTimer);
+  const pre = h("pre", {class: "log"});
+  const title = h("strong", {}, "…");
+  const closeb = h("button", {class: "btn", onclick: () => { openJob = null; clearInterval(logTimer); viewJobs(); }}, "Hide");
+  let offset = 0;
+  async function poll() {
+    try {
+      const j = await api("GET", "jobs/" + id + "?offset=" + offset);
+      const stick = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 30;
+      if (j.lines.length) { pre.append(document.createTextNode(j.lines.join("\n") + "\n")); offset += j.lines.length; }
+      if (stick) pre.scrollTop = pre.scrollHeight;
+      title.textContent = j.label + " — " + j.status;
+      if (!["queued", "running"].includes(j.status)) clearInterval(logTimer);
+    } catch (e) { clearInterval(logTimer); title.textContent = "Job not found"; }
+  }
+  const wrap = () => document.getElementById("logbox");
+  const mount = () => { const b = wrap(); if (b) b.replaceChildren(h("div", {class: "bar"}, title, closeb), pre); else setTimeout(mount, 50); };
+  mount(); poll(); logTimer = setInterval(poll, 1200);
+}
+
+// ---- settings
+async function viewConfig() {
+  const feeds = await api("GET", "feeds");
+  const sel = h("select", {}, h("option", {value: ""}, "All feeds (defaults)"),
+    ...feeds.map(f => h("option", {value: f.name}, "Only: " + f.name)));
+  const body = h("div", {});
+  async function load() {
+    const feed = sel.value;
+    const cfg = await api("GET", "config" + (feed ? "?feed=" + encodeURIComponent(feed) : ""));
+    const inputs = {};
+    const fields = Object.entries(cfg.editable).map(([k, help]) => {
+      inputs[k] = h("input", {type: "text", value: cfg.values[k] || ""});
+      return h("div", {}, h("label", {}, k), inputs[k], h("div", {class: "hint"}, help));
+    });
+    body.replaceChildren(
+      h("div", {class: "card"}, h("div", {class: "mute"}, "File: " + cfg.path),
+        h("div", {class: "grid2"}, fields),
+        h("div", {class: "bar", style: "margin-top:14px"},
+          h("button", {class: "btn primary", onclick: guard(async () => {
+            const values = {};
+            for (const [k, el] of Object.entries(inputs)) if (el.value !== (cfg.values[k] || "")) values[k] = el.value;
+            if (!Object.keys(values).length) return toast("Nothing changed");
+            await api("PUT", "config", {feed: feed || null, values}); toast("Saved"); load(); })}, "Save changes"),
+          h("span", {class: "hint"}, feed ? "Saved as overrides for " + feed + "." : "Applies to every feed without its own override."))),
+      h("div", {class: "card"}, h("h3", {}, "Read-only here"),
+        h("div", {class: "hint"}, "greg runs these as code, so they can't be edited from a web page. Change them over SSH in the config file."),
+        ...cfg.readonly.map(k => h("div", {}, h("label", {}, k), h("pre", {class: "log", style: "max-height:none"}, cfg.values[k] || "(not set)")))));
+  }
+  sel.addEventListener("change", guard(load));
+  main.replaceChildren(h("div", {class: "bar"}, h("div", {style: "min-width:260px"}, sel)), body);
+  await load();
+}
+
+// ---- status
+async function viewStatus() {
+  async function draw(withVpn) {
+    const s = await api("GET", "status" + (withVpn ? "?vpn=1" : ""));
+    const cards = [];
+    cards.push(h("div", {class: "card"}, h("h3", {}, "Disk"),
+      ...s.disks.map(d => h("div", {style: "margin-bottom:8px"},
+        h("div", {}, d.label, " ", h("span", {class: "mute"}, d.path)),
+        h("meter", {min: 0, max: d.total, value: d.total - d.free, low: d.total * .8, high: d.total * .9, optimum: 0}),
+        h("div", {class: "hint"}, bytes(d.free) + " free of " + bytes(d.total))))));
+    if (s.checks.length) cards.push(h("div", {class: "card"}, h("h3", {}, "Checks"),
+      ...s.checks.map(c => h("div", {}, h("span", {class: c.ok ? "ok" : "bad"}, c.ok ? "● " : "✕ "),
+        c.kind + " ", h("strong", {}, c.name), " ", h("span", {class: "mute"}, c.detail)))));
+    const v = s.vpn;
+    cards.push(h("div", {class: "card"}, h("h3", {}, "VPN route"),
+      v ? (!v.configured ? h("div", {class: "mute"}, "No vpn_prefix configured.") :
+        h("div", {}, h("span", {class: v.ok ? "ok" : "bad"}, v.ok ? "● working: " : "✕ not separated: "),
+          "normal traffic ", h("strong", {}, v.normal || "?"), ", vpn traffic ", h("strong", {}, v.vpn || "no answer")))
+        : h("button", {class: "btn", onclick: guard(() => draw(true))}, "Test VPN route")));
+    main.replaceChildren(h("div", {class: "mute", style: "margin-bottom:10px"}, "Server time " + s.time), ...cards);
+  }
+  await draw(false);
+  timers.push(setInterval(() => { if (current === "status") draw(false).catch(() => {}); }, 15000));
+}
+
+// job indicator in the header
+async function pulse() {
+  try {
+    const jobs = await api("GET", "jobs");
+    const run = jobs.filter(j => j.status === "running" || j.status === "queued").length;
+    document.getElementById("jobdot").textContent = run ? "● " + run + " job" + (run > 1 ? "s" : "") + " running" : "";
+  } catch (e) {}
+}
+setInterval(pulse, 5000); pulse();
+go("feeds");
+window.addEventListener("unhandledrejection", e => toast(e.reason && e.reason.message || "Error", true));
+</script>
+</body>
+</html>

@@ -45,6 +45,14 @@ def tui(args):
     gtui.run(args)
 
 
+def web(args):
+    """
+    Start the web interface
+    """
+    import greg.web as gweb
+    gweb.run(args)
+
+
 def add(args):
     """
     Add a new feed
@@ -61,8 +69,7 @@ def add(args):
         if value is not None and key != "func" and key != "name":
             entry[key] = value
     session.feeds[args["name"]] = entry
-    with open(session.data_filename, 'w') as configfile:
-        session.feeds.write(configfile)
+    session.save_feeds()
 
 
 def edit(args):  # Edits the information associated with a certain feed
@@ -73,8 +80,7 @@ def edit(args):  # Edits the information associated with a certain feed
     for key, value in args.items():
         if value is not None and key == "url":
             session.feeds[args["name"]][key] = str(value)
-            with open(session.data_filename, 'w') as configfile:
-                session.feeds.write(configfile)
+            session.save_feeds()
         if value is not None and key == "downloadfrom":
             try:
                 dateinfo = (session.feeds[
@@ -82,8 +88,7 @@ def edit(args):  # Edits the information associated with a certain feed
             except KeyError:
                 session.feeds[args["name"]]["date_info"] = "available"
                 # provisionally!
-                with open(session.data_filename, 'w') as configfile:
-                    session.feeds.write(configfile)
+                session.save_feeds()
                 dateinfo = False  # provisionally
             if dateinfo:
                 print(("{} has no date information that I can use."
@@ -129,8 +134,7 @@ def remove(args):
         return 0
     else:
         session.feeds.remove_section(args["name"])
-        with open(session.data_filename, 'w') as configfile:
-            session.feeds.write(configfile)
+        session.save_feeds()
         try:
             os.remove(os.path.join(session.data_dir, args["name"]))
         except FileNotFoundError:

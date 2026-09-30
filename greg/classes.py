@@ -51,6 +51,16 @@ class Session():
         self.config = configparser.ConfigParser()
         self.config.read([config_filename_global, self.config_filename_user])
 
+    def save_feeds(self):
+        """
+        Write the feed list atomically: an error while writing must never
+        leave the data file truncated.
+        """
+        tmp = self.data_filename + ".tmp"
+        with open(tmp, 'w') as configfile:
+            self.feeds.write(configfile)
+        os.replace(tmp, self.data_filename)
+
     def list_feeds(self):
         """
         Output a list of all feed names
@@ -186,8 +196,7 @@ class Feed():
                     sync_by_date = False
         if not sync_by_date:
             session.feeds[name]["date_info"] = "not available"
-            with open(session.data_filename, 'w') as configfile:
-                session.feeds.write(configfile)
+            session.save_feeds()
         else:
             try:
                 if session.feeds[name]["date_info"] == "not available":
@@ -201,8 +210,7 @@ class Feed():
             except KeyError:
                 pass
             session.feeds[name]["date_info"] = "available"
-            with open(session.data_filename, 'w') as configfile:
-                session.feeds.write(configfile)
+            session.save_feeds()
         return sync_by_date
 
     def will_tag(self):

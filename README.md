@@ -23,6 +23,20 @@ mkdir -p ~/.config/greg && cp `greg retrieveglobalconf` ~/.config/greg/greg.conf
 
 Then open and edit `~/.config/greg/greg.conf` in a text editor. The configuration file is self-explanatory.
 
+## Web interface
+
+`greg web` starts a small web UI (standard library only) for managing feeds,
+syncing, browsing/downloading episodes, editing settings and seeing system
+status. It listens on `127.0.0.1:8787` and will not start without a password:
+
+    greg web --set-password
+    greg web
+
+Settings live in `~/.config/greg/web.json`. If you expose it, put it behind a
+TLS-terminating reverse proxy and set `"trust_proxy": true`. `filter` and
+`downloadhandler` are shown read-only in the UI on purpose, since greg executes
+them as code.
+
 ## Usage
 
 Let's start by adding a feed (RSS or Atom versions will do):

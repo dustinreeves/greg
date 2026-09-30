@@ -13,6 +13,6 @@ setup(
     url='https://github.com/manolomartinez/greg',
     packages=['greg'],
     entry_points={'console_scripts': ['greg = greg.parser:main']},
-    package_data={'greg': ['data/*.conf']},
+    package_data={'greg': ['data/*.conf', 'data/*.html']},
     license='GPLv3'
 )
