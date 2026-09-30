@@ -23,6 +23,35 @@ mkdir -p ~/.config/greg && cp `greg retrieveglobalconf` ~/.config/greg/greg.conf
 
 Then open and edit `~/.config/greg/greg.conf` in a text editor. The configuration file is self-explanatory.
 
+## Docker, and sending some feeds through a VPN
+
+A `Dockerfile` and a `docker-compose.yml` are included. The compose file runs
+greg (web interface plus a built-in hourly sync) next to
+[gluetun](https://github.com/qdm12/gluetun), a VPN client container, and sends
+only the feeds that need it (Patreon, by default) through the VPN:
+
+    cp .env.example .env            # your WireGuard / VPN details
+    echo 'a long password' > greg_web_password.txt
+    mkdir -p config data downloads gluetun
+    docker compose up -d            # then open http://127.0.0.1:8787
+
+The same `proxy` setting works without Docker, with any proxy (wireproxy, an
+SSH tunnel, Tailscale...). See [docs/vpn.md](docs/vpn.md).
+
+## Web interface
+
+`greg web` starts a small web UI (standard library only) for managing feeds,
+syncing, browsing/downloading episodes, editing settings and seeing system
+status. It listens on `127.0.0.1:8787` and will not start without a password:
+
+    greg web --set-password
+    greg web
+
+Settings live in `~/.config/greg/web.json`. If you expose it, put it behind a
+TLS-terminating reverse proxy and set `"trust_proxy": true`. `filter` and
+`downloadhandler` are shown read-only in the UI on purpose, since greg executes
+them as code.
+
 ## Usage
 
 Let's start by adding a feed (RSS or Atom versions will do):

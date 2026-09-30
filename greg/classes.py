@@ -50,6 +50,22 @@ class Session():
         self.feeds.read(self.data_filename)
         self.config = configparser.ConfigParser()
         self.config.read([config_filename_global, self.config_filename_user])
+        # The same files, but feed sections do NOT inherit from [DEFAULT]
+        # (so we can tell what a feed sets for itself), and no interpolation.
+        self.raw_config = configparser.ConfigParser(
+            default_section="__no_default__", interpolation=None)
+        self.raw_config.read([config_filename_global,
+                              self.config_filename_user])
+
+    def save_feeds(self):
+        """
+        Write the feed list atomically: an error while writing must never
+        leave the data file truncated.
+        """
+        tmp = self.data_filename + ".tmp"
+        with open(tmp, 'w') as configfile:
+            self.feeds.write(configfile)
+        os.replace(tmp, self.data_filename)
 
     def list_feeds(self):
         """
@@ -102,8 +118,11 @@ class Feed():
         self.args = session.args
         self.config = self.session.config
         self.name = feed
+        url = session.feeds[feed]["url"] if feed in session.feeds else ""
+        self.proxy = aux.proxy_for(session, feed, url)
         if not podcast:
-            self.podcast = aux.parse_podcast(session.feeds[feed]["url"])
+            self.podcast = aux.parse_podcast(session.feeds[feed]["url"],
+                                             self.proxy)
         else:
             self.podcast = podcast
         self.sync_by_date = self.has_date()
@@ -112,7 +131,9 @@ class Feed():
             self.defaulttagdict = self.default_tag_dict()
         self.mime = self.retrieve_mime()
         self.wentwrong = False
-        if self.podcast.bozo: # the bozo bit is on, see feedparser docs
+        if self.podcast.get("proxy_error"):
+            self.wentwrong = self.podcast["proxy_error"]
+        elif self.podcast.bozo: # the bozo bit is on, see feedparser docs
             warning = str(self.podcast["bozo_exception"])
             if "URLError" in warning:
                 self.wentwrong = warning
@@ -186,8 +207,7 @@ class Feed():
                     sync_by_date = False
         if not sync_by_date:
             session.feeds[name]["date_info"] = "not available"
-            with open(session.data_filename, 'w') as configfile:
-                session.feeds.write(configfile)
+            session.save_feeds()
         else:
             try:
                 if session.feeds[name]["date_info"] == "not available":
@@ -201,8 +221,7 @@ class Feed():
             except KeyError:
                 pass
             session.feeds[name]["date_info"] = "available"
-            with open(session.data_filename, 'w') as configfile:
-                session.feeds.write(configfile)
+            session.save_feeds()
         return sync_by_date
 
     def will_tag(self):
@@ -398,5 +417,6 @@ class Placeholders:
                                    name=self.name,
                                    subtitle=self.sanitizedsubtitle,
                                    entrysummary=self.entrysummary,
-                                   itunes_episode = self.itunes_episode)
+                                   itunes_episode=self.itunes_episode,
+                                   proxy=self.feed.proxy or "")
         return newst

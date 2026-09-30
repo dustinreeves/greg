@@ -1,0 +1,66 @@
+# greg + gluetun: only feeds that need it (see GREG_PROXY_HOSTS) go through the VPN.
+#
+#   cp .env.example .env        # fill in your WireGuard details
+#   echo 'a long password' > greg_web_password.txt
+#   docker compose up -d
+#   open http://127.0.0.1:8787   (user: greg)
+#
+# How it works: gluetun runs the VPN and offers an HTTP proxy on port 8888 inside
+# the compose network. greg itself stays on the normal network (so the web UI
+# and your other feeds are unaffected) and is told to use that proxy only for
+# the hosts you list. If the VPN drops, those feeds fail; they never leak out
+# over your normal connection.
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER:-custom}
+      - VPN_TYPE=wireguard
+      # --- custom WireGuard (see .env.example); other providers: see the gluetun wiki
+      - WIREGUARD_PRIVATE_KEY=${WIREGUARD_PRIVATE_KEY:-}
+      - WIREGUARD_ADDRESSES=${WIREGUARD_ADDRESSES:-}
+      - WIREGUARD_PUBLIC_KEY=${WIREGUARD_PUBLIC_KEY:-}
+      - WIREGUARD_PRESHARED_KEY=${WIREGUARD_PRESHARED_KEY:-}
+      - WIREGUARD_ENDPOINT_IP=${WIREGUARD_ENDPOINT_IP:-}
+      - WIREGUARD_ENDPOINT_PORT=${WIREGUARD_ENDPOINT_PORT:-51820}
+      # --- the proxy greg uses (reachable only inside the compose network)
+      - HTTPPROXY=on
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./gluetun:/gluetun
+    restart: unless-stopped
+
+  greg:
+    build: .
+    # image: ghcr.io/dustinreeves/greg:latest   # once published, instead of `build`
+    user: "${PUID:-1000}:${PGID:-1000}"
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      # where feeds that need the VPN go, and which hosts they are
+      - GREG_PROXY=http://gluetun:8888
+      - GREG_PROXY_HOSTS=patreon.com
+      - GREG_SYNC_EVERY_MINUTES=60
+      - GREG_WEB_USER=${GREG_WEB_USER:-greg}
+      - GREG_WEB_PASSWORD_FILE=/run/secrets/greg_web_password
+    secrets:
+      - greg_web_password
+    volumes:
+      - ./config:/home/greg/.config/greg      # greg.conf, web.json
+      - ./data:/home/greg/.local/share/greg   # feed list and history
+      - ./downloads:/downloads                # your episodes
+    ports:
+      # Localhost only. To reach it from elsewhere, put a TLS reverse proxy in
+      # front (and set GREG_TRUST_PROXY=1 and GREG_ALLOWED_HOSTS=your.host).
+      - "127.0.0.1:8787:8787"
+    restart: unless-stopped
+
+secrets:
+  greg_web_password:
+    file: ./greg_web_password.txt

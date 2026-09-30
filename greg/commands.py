@@ -45,6 +45,43 @@ def tui(args):
     gtui.run(args)
 
 
+def proxytest(args):
+    """
+    Show the public address seen directly and through each configured proxy
+    """
+    session = c.Session(args)
+    proxies = []
+    for name in session.list_feeds():
+        pr = aux.proxy_for(session, name, session.feeds[name].get("url", ""))
+        if pr and pr not in proxies:
+            proxies.append(pr)
+    default = session.raw_config.get("DEFAULT", "proxy", fallback="").strip()
+    if default and default not in proxies:
+        proxies.append(default)
+    if not proxies:
+        print("No proxy is configured (see 'proxy' in greg.conf).")
+        return
+    direct = aux.egress_ip()
+    print("direct:".ljust(34), direct)
+    bad = False
+    for pr in proxies:
+        ip = aux.egress_ip(pr)
+        ok = ip and not ip.startswith("error") and ip != direct
+        bad = bad or not ok
+        print(("via " + aux.mask_proxy(pr) + ":").ljust(34), ip,
+              "" if ok else "  <-- NOT working or not separated")
+    if bad:
+        sys.exit(1)
+
+
+def web(args):
+    """
+    Start the web interface
+    """
+    import greg.web as gweb
+    gweb.run(args)
+
+
 def add(args):
     """
     Add a new feed
@@ -61,8 +98,7 @@ def add(args):
         if value is not None and key != "func" and key != "name":
             entry[key] = value
     session.feeds[args["name"]] = entry
-    with open(session.data_filename, 'w') as configfile:
-        session.feeds.write(configfile)
+    session.save_feeds()
 
 
 def edit(args):  # Edits the information associated with a certain feed
@@ -73,8 +109,7 @@ def edit(args):  # Edits the information associated with a certain feed
     for key, value in args.items():
         if value is not None and key == "url":
             session.feeds[args["name"]][key] = str(value)
-            with open(session.data_filename, 'w') as configfile:
-                session.feeds.write(configfile)
+            session.save_feeds()
         if value is not None and key == "downloadfrom":
             try:
                 dateinfo = (session.feeds[
@@ -82,8 +117,7 @@ def edit(args):  # Edits the information associated with a certain feed
             except KeyError:
                 session.feeds[args["name"]]["date_info"] = "available"
                 # provisionally!
-                with open(session.data_filename, 'w') as configfile:
-                    session.feeds.write(configfile)
+                session.save_feeds()
                 dateinfo = False  # provisionally
             if dateinfo:
                 print(("{} has no date information that I can use."
@@ -129,8 +163,7 @@ def remove(args):
         return 0
     else:
         session.feeds.remove_section(args["name"])
-        with open(session.data_filename, 'w') as configfile:
-            session.feeds.write(configfile)
+        session.save_feeds()
         try:
             os.remove(os.path.join(session.data_dir, args["name"]))
         except FileNotFoundError:

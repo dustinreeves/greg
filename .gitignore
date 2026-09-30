@@ -4,3 +4,11 @@ __pycache__/
 build/
 dist/
 deploy/
+
+# docker deployment (secrets and runtime state)
+.env
+greg_web_password.txt
+/config/
+/data/
+/downloads/
+/gluetun/
