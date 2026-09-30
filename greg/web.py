@@ -11,6 +11,7 @@ Settings live in ~/.config/greg/web.json (never in the greg repo):
     {
       "host": "127.0.0.1", "port": 8787,
       "username": "greg", "password_hash": "pbkdf2$...",   # `greg web --set-password`
+      "min_password_length": 12,     # enforced by --set-password
       "trust_proxy": false,          # believe X-Forwarded-For (behind Caddy)
       "allowed_hosts": [],           # optional Host header allow-list
       "vpn_prefix": [],              # command prefix for feeds that need it
@@ -860,9 +861,12 @@ def run(args):
     """Entry point for `greg web`."""
     settings = load_settings(args)
     if args.get("set_password"):
+        minlen = int(settings.get("min_password_length", 12))
         pw = getpass.getpass("New web UI password: ")
-        if len(pw) < 12:
-            sys.exit("Please use at least 12 characters.")
+        if len(pw) < minlen:
+            sys.exit("Please use at least {} characters (see "
+                     "min_password_length in the web settings).".format(
+                         minlen))
         if pw != getpass.getpass("Again: "):
             sys.exit("Passwords don't match.")
         settings["password_hash"] = hash_password(pw)
