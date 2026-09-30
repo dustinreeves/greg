@@ -6,7 +6,7 @@ setup(
     version='0.4.8',
     install_requires=['feedparser', 'requests',
                       'windows-curses; sys_platform == "win32"'],
-    extras_requires={'tagging' : ['eyeD3']},
+    extras_require={'tagging': ['eyeD3'], 'socks': ['PySocks']},
     description='A command-line podcast aggregator',
     author='Manolo Martínez',
     author_email='manolo@austrohungaro.com',
