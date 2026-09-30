@@ -17,6 +17,8 @@ Settings live in ~/.config/greg/web.json (never in the greg repo):
       "vpn_prefix": [],              # command prefix for feeds that need it
       "vpn_hosts": ["patreon.com"],  # feeds whose url host matches use it
       "vpn_feeds": [],               # or name feeds explicitly
+      "schedules": [],               # [{"name","feeds":["all"],"every_minutes":60}]
+                                     # (or set env GREG_SYNC_EVERY_MINUTES)
       "status": {"mounts": [], "interfaces": [], "processes": []}
     }
 """
@@ -529,6 +531,70 @@ class JobManager:
             "failed" if failed else "done")
 
 
+class Scheduler(threading.Thread):
+    """
+    Runs syncs on a timer, so no cron is needed (handy in a container).
+    Each schedule: {"name": "hourly", "feeds": ["all"], "every_minutes": 60}.
+    A schedule is skipped while its previous run is still queued or running.
+    """
+    def __init__(self, greg, jobs, schedules):
+        threading.Thread.__init__(self, daemon=True)
+        self.greg, self.jobs = greg, jobs
+        self.schedules = []
+        for i, sc in enumerate(schedules):
+            every = float(sc.get("every_minutes", 0))
+            if every < 1:
+                continue
+            self.schedules.append({
+                "name": str(sc.get("name") or "schedule-{}".format(i + 1)),
+                "feeds": sc.get("feeds") or ["all"],
+                "every": every * 60,
+                "next": time.time() + (0 if sc.get("run_on_start")
+                                       else every * 60),
+                "job": None})
+
+    def describe(self):
+        now = time.time()
+        return [{"name": sc["name"], "feeds": sc["feeds"],
+                 "every_minutes": sc["every"] / 60,
+                 "next_in_seconds": max(0, int(sc["next"] - now))}
+                for sc in self.schedules]
+
+    def run(self):
+        while True:
+            now = time.time()
+            for sc in self.schedules:
+                if now < sc["next"]:
+                    continue
+                sc["next"] = now + sc["every"]
+                prev = sc["job"]
+                if prev is not None and prev.status in ("queued", "running"):
+                    continue
+                try:
+                    feeds = sc["feeds"]
+                    if feeds == ["all"]:
+                        feeds = self.greg.session().list_feeds()
+                    if not feeds:
+                        continue
+                    sc["job"] = self.jobs.submit(Job(
+                        "scheduled: {}".format(sc["name"]),
+                        build_steps(self.greg, "sync", feeds)))
+                except Exception as e:
+                    sys.stderr.write("scheduler {}: {!r}\n".format(
+                        sc["name"], e))
+            time.sleep(15)
+
+
+def schedules_from(settings):
+    """web.json "schedules", or GREG_SYNC_EVERY_MINUTES for a single one."""
+    schedules = list(settings.get("schedules") or [])
+    env = os.environ.get("GREG_SYNC_EVERY_MINUTES")
+    if env and not schedules:
+        schedules = [{"name": "sync all", "feeds": ["all"],
+                      "every_minutes": float(env)}]
+    return schedules
+
+
 def worker_argv(greg, *rest):
     argv = [sys.executable, "-m", "greg.jobs"] + list(rest)
     # pass through the same config/data location as the web server uses
@@ -581,6 +647,8 @@ def system_status(greg):
         except OSError:
             pass
     out["disks"] = disks
+    sched = getattr(greg, "scheduler", None)
+    out["schedules"] = sched.describe() if sched else []
     st = greg.settings.get("status", {})
     for m in st.get("mounts", []):
         ok = os.path.ismount(m)
@@ -910,6 +978,8 @@ def run(args):
     port = int(args.get("port") or settings.get("port", 8787))
     greg = Greg(args, settings)
     jobs = JobManager()
+    greg.scheduler = Scheduler(greg, jobs, schedules_from(settings))
+    greg.scheduler.start()
     httpd = Server((host, port), make_handler(greg, jobs, settings))
     print("greg web listening on http://{}:{}".format(host, port), flush=True)
     try:

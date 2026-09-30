@@ -346,6 +346,10 @@ async function viewStatus() {
         h("div", {}, d.label, " ", h("span", {class: "mute"}, d.path)),
         h("meter", {min: 0, max: d.total, value: d.total - d.free, low: d.total * .8, high: d.total * .9, optimum: 0}),
         h("div", {class: "hint"}, bytes(d.free) + " free of " + bytes(d.total))))));
+    if (s.schedules && s.schedules.length) cards.push(h("div", {class: "card"}, h("h3", {}, "Schedules"),
+      ...s.schedules.map(x => h("div", {}, h("strong", {}, x.name), " ",
+        h("span", {class: "mute"}, x.feeds.join(", ") + " every " + x.every_minutes + " min; next in " +
+          Math.round(x.next_in_seconds / 60) + " min")))));
     if (s.checks.length) cards.push(h("div", {class: "card"}, h("h3", {}, "Checks"),
       ...s.checks.map(c => h("div", {}, h("span", {class: c.ok ? "ok" : "bad"}, c.ok ? "● " : "✕ "),
         c.kind + " ", h("strong", {}, c.name), " ", h("span", {class: "mute"}, c.detail)))));
