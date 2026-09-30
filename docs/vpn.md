@@ -101,7 +101,7 @@ feeds through a command wrapper (`vpn_prefix` in `web.json`, for example
 # /etc/wireguard/wgvpn.conf
 [Interface]
 PrivateKey = ...
-Address = 10.8.0.10/32
+Address = 10.64.0.2/32
 Table = off                      # do NOT install a default route
 PostUp = sysctl -w net.ipv4.conf.%i.rp_filter=2     # replies are dropped without this
 PostUp = ip rule del fwmark 0x51 table 51820 priority 100 2>/dev/null || true
