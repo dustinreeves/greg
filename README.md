@@ -2,20 +2,30 @@
 
 A command-line podcast aggregator, written in python. It basically exposes some
 of the functionality of the excellent
-[feedparser](http://pypi.python.org/pypi/feedparser).
+[feedparser](https://pypi.org/project/feedparser/).
+
+Besides the command line, this version has a [terminal interface](#terminal-interface),
+a [web interface](#web-interface), a [Docker setup](#docker-and-sending-some-feeds-through-a-vpn),
+and can send chosen feeds [through a VPN or proxy](docs/vpn.md).
 
 ## Installation
 
-Use [pip](https://pip.pypa.io/en/stable/):
+Clone this repository and install it with [pip](https://pip.pypa.io/en/stable/):
 
-`pip install --user greg`
+```
+git clone https://github.com/dustinreeves/greg
+cd greg
+pip install --user .
+```
 
-If you run [Arch Linux](https://archlinux.org/), there is also an [AUR
-package](https://aur.archlinux.org/packages/greg-git/).
+Optional extras: `pip install --user ".[tagging]"` for ID3 tagging (EyeD3) and
+`".[socks]"` if you use a SOCKS proxy. On Windows, the terminal interface uses
+`windows-curses`, which is installed automatically.
 
 ## Configuration
 
-To edit the configuration for greg, copy the system-wide [greg.conf](https://github.com/manolomartinez/greg/blob/master/greg/data/greg.conf) file to your local config folder:
+To edit the configuration for greg, copy the system-wide
+[greg.conf](greg/data/greg.conf) file to your local config folder:
 
 ```
 mkdir -p ~/.config/greg && cp `greg retrieveglobalconf` ~/.config/greg/greg.conf
@@ -23,91 +33,47 @@ mkdir -p ~/.config/greg && cp `greg retrieveglobalconf` ~/.config/greg/greg.conf
 
 Then open and edit `~/.config/greg/greg.conf` in a text editor. The configuration file is self-explanatory.
 
-## Docker, and sending some feeds through a VPN
-
-A `Dockerfile` and a `docker-compose.yml` are included. The compose file runs
-greg (web interface plus a built-in hourly sync) next to
-[gluetun](https://github.com/qdm12/gluetun), a VPN client container, and sends
-only the feeds that need it (Patreon, by default) through the VPN:
-
-    cp .env.example .env            # your WireGuard / VPN details
-    echo 'a long password' > greg_web_password.txt
-    mkdir -p config data downloads gluetun
-    docker compose up -d            # then open http://127.0.0.1:8787
-
-The same `proxy` setting works without Docker, with any proxy (wireproxy, an
-SSH tunnel, Tailscale...). See [docs/vpn.md](docs/vpn.md).
-
-## Web interface
-
-`greg web` starts a small web UI (standard library only) for managing feeds,
-syncing, browsing/downloading episodes, editing settings and seeing system
-status. It listens on `127.0.0.1:8787` and will not start without a password:
-
-    greg web --set-password
-    greg web
-
-Settings live in `~/.config/greg/web.json`. If you expose it, put it behind a
-TLS-terminating reverse proxy and set `"trust_proxy": true`. `filter` and
-`downloadhandler` are shown read-only in the UI on purpose, since greg executes
-them as code.
-
 ## Usage
 
 Let's start by adding a feed (RSS or Atom versions will do):
 
-    greg add PhilosophyBites http://philosophybites.com/atom.xml
+    greg add mssp https://feeds.megaphone.fm/GLT1158789509
 
 The `add` command expects a name and a url of an RSS or Atom feed. You will use this name to refer to the feed whenever you interact with it.
 
 If you were to run `greg sync` now, it would download the latest episode of the podcast to the default directory (which is `~/Podcasts`; you can change how many episodes are dowloaded in the first sync, and the download directory, in the config file; see below). But maybe we just want to check out what this podcast is all about, so we download a list of available entries:
 
-    greg check -f PhilosophyBites
+    greg check -f mssp
 
-(the `-f` flag means that "PhilosophyBites" is the name of a feed. `greg check` also accepts urls directly, using the `-u` flag.)
+(the `-f` flag means that "mssp" is the name of a feed. `greg check` also accepts urls directly, using the `-u` flag.)
 
 This will give you the following kind of info:
 
 
-    0: Tom Sorell on Surveillance (2013-01-25T13:43:46+00:00)
-    1: John Campbell on Schizophrenia (2013-01-08T12:41:27+00:00)
-    2: Kendall Walton on Photography (2012-12-23T12:33:09+00:00)
-    3: Twitter Competition: Who's Your Favourite Philosopher? (2012-12-11T07:24:51+00:00)
-    4: Alan Ryan on Freedom and Its History (2012-12-08T11:16:45+00:00)
-    5: Nigel Warburton at Blackwell's Bookshop, Oxford 7pm Wed. Dec. 5th (2012-12-01T11:19:09+00:00)
-    6: Who's Your Favourite Philosopher? (2012-11-30T18:33:56+00:00)
-    7: Peter Adamson on Avicenna's Flying Man Thought Experiment (2012-11-26T15:57:18+00:00)
-    8: Links to Past Episodes (2012-12-01T11:53:03+00:00)
-    9: Tim Bayne on the Unity of  Consciousness (2012-11-11T22:20:17+00:00)
-    10: Galen Strawson on the Sense of Self (2012-05-05T12:56:05+01:00)
-    11: Liane Young on Mind and Morality (2012-10-27T12:39:22+01:00)
-    12: Gary L. Francione on Animal Abolitionism (2012-10-13T13:48:32+01:00)
-    13: Richard Sorabji on Mahatma Gandhi as Philosopher (2012-09-28T13:18:08+01:00)
-    14: Tim Crane on Non-Existence (2012-09-15T18:50:32+01:00)
-    15: Michael Tye on Pain (2012-08-31T20:51:01+01:00)
-    16: Daniel Dennett on Free Will Worth Wanting (2012-08-18T08:58:24+01:00)
-    17: Pat Churchland on What Neuroscience Can Teach Us About Morality (2012-08-03T22:52:12+01:00)
-    18: Rae Langton on Hate Speech (2012-07-28T20:14:27+01:00)
-    19: Molly Crockett on Brain Chemistry and Moral-Decision Making (originally on Bioethics Bites) (2012-07-22T21:14:35+01:00)
+    0: Ep 638 - Beef Raised Right (feat. Mason 'Bric' LaDue) (Tue, 29 Sep 2026 12:00:00 -0000)
+    1: Ep 637 - Throat Wrecker (feat. Jeremiah Watkins) (Wed, 23 Sep 2026 12:00:00 -0000)
+    2: Ep 636 - Mr. Chili's (feat. Sam Tallent) (Wed, 16 Sep 2026 12:00:00 -0000)
+    3: Ep 635 - Podcaster's Union (feat. Kevin Ryan & H. Foley) (Thu, 10 Sep 2026 12:00:00 -0000)
+    4: Ep 634 - Department of Jokes (feat. Yakov Smirnoff) (Fri, 04 Sep 2026 12:00:00 -0000)
+    5: Ep 633 - Submerged in Silence (Wed, 26 Aug 2026 12:00:00 -0000)
+    6: Ep 632 - R.I.P. Andy (feat. Tim Butterly) (Fri, 21 Aug 2026 12:00:00 -0000)
+    7: Ep 631 - B.B.Q. (feat. Joe Derosa) (Wed, 12 Aug 2026 12:00:00 -0000)
+    8: Ep 630 - Buildings (feat. Michael P. Murphy) (Mon, 10 Aug 2026 12:00:00 -0000)
+    9: Ep 629 - Like and Subscribe (feat. Danny McBride & Steve Gerben) (Sat, 08 Aug 2026 11:00:00 -0000)
+    ...
 
 Interesting stuff. We'll download a couple of episodes, just to make sure that
 it's really worth it:
 
-    greg download 1, 5-7
+    greg download 1, 4-5
 
 and Greg says
 
-    Downloading John Campbell on Schizophrenia -- John_Campbell_on_Schizophrenia.mp3
+    Downloading Ep 637 - Throat Wrecker (feat. Jeremiah Watkins) -- GLT5154354170.mp3
     Done
-    Downloading John Campbell on Schizophrenia -- John_Campbell_on_Berkeleys_Puzzle_1.mp3
+    Downloading Ep 634 - Department of Jokes (feat. Yakov Smirnoff) -- GLT3142585669.mp3
     Done
-    Downloading Who's Your Favourite Philosopher? -- Whos_Your_Favourite_Philosopher_.mp3
-    Done
-    Downloading Peter Adamson on Avicenna's Flying Man Thought Experiment -- Peter_Adamson_on_Avicennas_Flying_Man.mp3
-    Done
-    Downloading Peter Adamson on Avicenna's Flying Man Thought Experiment -- AdamsonMixSes.MP3
-    Done
-    Downloading Peter Adamson on Avicenna's Flying Man Thought Experiment -- Peter_Adamson_on_Plotinus_on_Evil.mp3
+    Downloading Ep 633 - Submerged in Silence -- GLT5281904541.mp3
     Done
 
 As you can see, `greg download` accepts a range of episodes of the kind `a, b,
@@ -125,17 +91,17 @@ change that soon), inside a subdirectory named after the podcast (we can change
 that default too.) After listening to them we decide that this podcast is well
 worth our time, and keep it, or we decide that it's not, and
 
-    greg remove PhilosophyBites
+    greg remove mssp
 
-If we keep it, we might want to start `sync`ing from, say, the 30th of April,
-2013, on. So we edit the feed information
+If we keep it, we might want to start `sync`ing from, say, the 1st of September,
+2026, on. So we edit the feed information
 
-    greg edit PhilosophyBites -d 2013-4-30
+    greg edit mssp -d 2026-09-01
 
 We may also use the `now` keyword to instruct greg to start syncing from now
 on:
 
-    greg edit PhilosophyBites -d now
+    greg edit mssp -d now
 
 `-d` or `--downloadfrom` change the date after which Greg should start
 downloading episodes when it syncs. Currently, the only two things one can
@@ -146,7 +112,7 @@ subcommands.
 
 All right. Let's add a second feed:
 
-    greg add History http://podcast.ulcc.ac.uk/accounts/kings/Philosophy_podcasts.xml
+    greg add lemonparty https://feeds.megaphone.fm/TPC2913664141
 
 If you want to keep track of the feeds you have added, you can ask Greg:
 
@@ -154,50 +120,45 @@ If you want to keep track of the feeds you have added, you can ask Greg:
 
 which returns
 
-    PhilosophyBites
-    ---------------
-        url: http://philosophybites.com/atom.xml
-        Next sync will download from: 30 Apr 2013 00:00:00.
+    mssp
+    ----
+        url: https://feeds.megaphone.fm/GLT1158789509
+        Next sync will download from: 01 Sep 2026 00:00:00.
 
-    History
-    -------
-        url: http://podcast.ulcc.ac.uk/accounts/kings/Philosophy_podcasts.xml
+    lemonparty
+    ----------
+        url: https://feeds.megaphone.fm/TPC2913664141
 
-Let us add another feed:
-
-    greg add MusicaAntigua http://www.rtve.es/api/programas/23353/audios.rss
-
-This is a great program on ancient music at the Spanish public radio. The thing
-is, these guys do not tag their episodes, which is bad for most portable media
+Some podcasts do not tag their episodes, which is bad for most portable media
 players. Greg uses [EyeD3](https://github.com/nicfit/eyeD3) (as an optional
-dependency) to tag podcasts, if one so wishes. By default, it uses the podcast
-name for the *artist* tag, and the entry title for the *title* tag. To enable
-tagging for MusicaAntigua, copy the system-wide config file locally. (see
-[Configuration](#configuration) above)
+dependency, `pip install ".[tagging]"`) to tag podcasts, if one so wishes. By
+default, it uses the podcast name for the *artist* tag, and the entry title for
+the *title* tag. To enable tagging for lemonparty, copy the system-wide config
+file locally. (see [Configuration](#configuration) above)
 
-Then, add a section for MusicaAntigua:
+Then, add a section for lemonparty:
 
-    [MusicaAntigua]
+    [lemonparty]
 
     Tag = yes
 
 In fact, you can fill out any tag however you see fit. For example,
 
-    tag_genre = Ancient Music
+    tag_genre = Comedy
     tag_comment = {date}
 
-will fill the *genre* tag with the string "Ancient Music", and the *comment*
+will fill the *genre* tag with the string "Comedy", and the *comment*
 tag with the download date.
 
 Let's add a video podcast
 
-    greg add TEDTalks http://feeds.feedburner.com/TEDTalks_video
+    greg add myvideos https://example.com/video-feed.xml
 
 By default, Greg only donwloads audio files (in fact, files that have "audio"
-as part of their type). In order to download the right file in TEDTalks, then,
+as part of their type). In order to download the right file in a video feed,
 you need to change that in the config file. Again, add a section:
 
-    [TEDTalks]
+    [myvideos]
 
     mime = video
 
@@ -208,11 +169,11 @@ Another useful thing that you can change in the config file is the download
 handler; Greg by default uses [requests](https://github.com/psf/requests), but
 you can use whatever you want.
 
-I, for example, have
+For example, you could put
 
     downloadhandler = wget {link} -P {directory}
 
-in my local `greg.conf`. You can do all sorts of nice things with this. For
+in your local `greg.conf`. You can do all sorts of nice things with this. For
 example, when `check`ing a podcast, you don't need to download it, but maybe
 just stream it, like this:
 
@@ -225,15 +186,66 @@ can use placeholders to add the date at the beginning, like this:
 
 One last thing: if you subscribe to a very active feed, and you are only
 interested in some of the entries, you can filter the feed. For example, if you
-only want to watch TED talks about Google, say, you can add the following line
-to the `[TEDTalks]` section:
+only want the episodes of the first podcast that have a guest, you can add the
+following line to the `[mssp]` section:
 
-    filter = "Google" in "{title}"
+    filter = "feat." in "{title}"
 
 (You need the quotes around {title} if the string you are filtering by has
 spaces, for example; they are strictly unnecessary here.)
 
 For information about the {placeholders}, take a look at
-[greg.conf](https://github.com/manolomartinez/greg/blob/master/greg/data/greg.conf).
+[greg.conf](greg/data/greg.conf).
 In `greg.conf` you can also change the download directory, and some other
 things. It should be self-explanatory.
+
+## Terminal interface
+
+`greg tui` opens a curses interface for managing feeds without remembering the
+commands: add, edit and remove feeds, sync one or all, browse a feed's episodes
+and download the ones you pick, with a live log underneath.
+
+| Key | Action |
+| --- | --- |
+| `a` / `d` / `e` | add / remove / edit the url of a feed |
+| `s` / `S` | sync the selected feed / sync all |
+| `Enter` | browse the feed's episodes (`Space` marks, `Enter` downloads) |
+| `r`, `q` | reload, quit |
+
+## Web interface
+
+`greg web` starts a small web UI (standard library only) for managing feeds,
+syncing, browsing/downloading episodes, editing settings and seeing system
+status. It listens on `127.0.0.1:8787` and will not start without a password:
+
+    greg web --set-password
+    greg web
+
+Settings live in `~/.config/greg/web.json`. To schedule syncs, add for example
+`"schedules": [{"name": "hourly", "feeds": ["all"], "every_minutes": 60}]` to
+it. If you expose the UI, put it behind a TLS-terminating reverse proxy and set
+`"trust_proxy": true`. `filter` and `downloadhandler` are shown read-only in the
+UI on purpose, since greg executes them as code.
+
+## Docker, and sending some feeds through a VPN
+
+A [Dockerfile](Dockerfile) and a [docker-compose.yml](docker-compose.yml) are
+included. The compose file runs greg (web interface plus a built-in hourly
+sync) next to [gluetun](https://github.com/qdm12/gluetun), a VPN client
+container, and sends only the feeds that need it (Patreon, by default) through
+the VPN:
+
+    cp .env.example .env            # your WireGuard / VPN details
+    echo 'a long password' > greg_web_password.txt
+    mkdir -p config data downloads gluetun
+    docker compose up -d            # then open http://127.0.0.1:8787
+
+The same `proxy` setting works without Docker, with any proxy (wireproxy, an
+SSH tunnel, Tailscale...). See [docs/vpn.md](docs/vpn.md), and run
+`greg proxytest` to check that a proxy is really in use.
+
+## Credits
+
+greg was written by Manolo Martínez and is licensed under the GPLv3 (see
+[COPYING](COPYING)). This version adds the terminal and web interfaces, the
+proxy setting and the Docker setup.
