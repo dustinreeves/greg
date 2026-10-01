@@ -322,7 +322,8 @@ def get_date(line):
 def _content_length(header_file):
     """
     Total size from the headers curl saved (-D). With redirects and retries
-    the file holds several responses; the last one is the real download.
+    the file holds several responses; only a final 2xx response describes the
+    download (a redirect's own small body must not be mistaken for it).
     """
     try:
         with open(header_file, errors="replace") as f:
@@ -330,14 +331,18 @@ def _content_length(header_file):
                       if b.strip().upper().startswith("HTTP/")]
     except OSError:
         return None
-    if not blocks:
+    for block in reversed(blocks):
+        lines = block.strip().splitlines()
+        parts = lines[0].split()
+        if len(parts) < 2 or not parts[1].startswith("2"):
+            continue  # a redirect or an error: keep looking back
+        for line in lines[1:]:
+            if line.lower().startswith("content-length:"):
+                try:
+                    return int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    return None
         return None
-    for line in blocks[-1].splitlines():
-        if line.lower().startswith("content-length:"):
-            try:
-                return int(line.split(":", 1)[1].strip())
-            except ValueError:
-                return None
     return None
 
 
@@ -397,8 +402,7 @@ def curl_download(url, dest, proxy=None, label=None, retries=3):
         while proc.poll() is None:
             time.sleep(0.5)
             now = time.time()
-            if total is None:
-                total = _content_length(hdr)
+            total = _content_length(hdr)  # re-read: redirects arrive first
             try:
                 size = os.path.getsize(part)
             except OSError:
