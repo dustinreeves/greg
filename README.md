@@ -227,7 +227,10 @@ status. It listens on `127.0.0.1:8787` and will not start without a password:
 
 Settings live in `~/.config/greg/web.json`. To schedule syncs, add for example
 `"schedules": [{"name": "hourly", "feeds": ["all"], "every_minutes": 60}]` to
-it. If you expose the UI, put it behind a TLS-terminating reverse proxy and set
+it. If your downloads live on a network or rclone mount, add
+`"require_mounts": ["/mnt/podcasts"]` so scheduled syncs are skipped, and manual
+jobs refused, while the mount is missing (instead of filling the local disk).
+If you expose the UI, put it behind a TLS-terminating reverse proxy and set
 `"trust_proxy": true`. `filter` and `downloadhandler` are shown read-only in the
 UI on purpose, since greg executes them as code.
 

@@ -17,6 +17,8 @@ Settings live in ~/.config/greg/web.json (never in the greg repo):
       "vpn_prefix": [],              # command prefix for feeds that need it
       "vpn_hosts": ["patreon.com"],  # feeds whose url host matches use it
       "vpn_feeds": [],               # or name feeds explicitly
+      "require_mounts": [],          # e.g. ["/mnt/podcasts"]: jobs refuse to run
+                                     # (and schedules skip) while one is missing
       "schedules": [],               # [{"name","feeds":["all"],"every_minutes":60}]
                                      # (or set env GREG_SYNC_EVERY_MINUTES)
       "status": {"mounts": [], "interfaces": [], "processes": []}
@@ -149,6 +151,11 @@ class Greg:
 
     def session(self):
         return c.Session(dict(self.args))
+
+    def missing_mounts(self):
+        """Required mount points that are not mounted right now."""
+        return [m for m in self.settings.get("require_mounts", [])
+                if not os.path.ismount(m)]
 
     @staticmethod
     def mask(url):
@@ -576,7 +583,8 @@ class Scheduler(threading.Thread):
         now = time.time()
         return [{"name": sc["name"], "feeds": sc["feeds"],
                  "every_minutes": sc["every"] / 60,
-                 "next_in_seconds": max(0, int(sc["next"] - now))}
+                 "next_in_seconds": max(0, int(sc["next"] - now)),
+                "skipped": sc.get("skipped")}
                 for sc in self.schedules]
 
     def run(self):
@@ -589,6 +597,13 @@ class Scheduler(threading.Thread):
                 prev = sc["job"]
                 if prev is not None and prev.status in ("queued", "running"):
                     continue
+                missing = self.greg.missing_mounts()
+                if missing:
+                    sc["skipped"] = "mount missing: " + ", ".join(missing)
+                    sys.stderr.write("scheduler {}: skipped, {}\n".format(
+                        sc["name"], sc["skipped"]))
+                    continue
+                sc["skipped"] = None
                 try:
                     feeds = sc["feeds"]
                     if feeds == ["all"]:
@@ -669,7 +684,9 @@ def system_status(greg):
     sched = getattr(greg, "scheduler", None)
     out["schedules"] = sched.describe() if sched else []
     st = greg.settings.get("status", {})
-    for m in st.get("mounts", []):
+    for m in list(st.get("mounts", [])) + [
+            x for x in greg.settings.get("require_mounts", [])
+            if x not in st.get("mounts", [])]:
         ok = os.path.ismount(m)
         out["checks"].append({"kind": "mount", "name": m, "ok": ok,
                               "detail": "mounted" if ok else "NOT mounted"})
@@ -920,6 +937,10 @@ def make_handler(greg, jobs, settings):
                     return self.send_json([j.info() for j in reversed(
                         list(jobs.jobs.values()))])
                 if method == "POST":
+                    missing = greg.missing_mounts()
+                    if missing:
+                        raise ValueError("Required mount is missing: " +
+                                         ", ".join(missing))
                     b = self.body()
                     action = b.get("action")
                     feeds = b.get("feeds") or []
