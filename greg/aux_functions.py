@@ -23,6 +23,7 @@ import os
 import subprocess
 import sys
 import re
+import shutil
 import time
 import unicodedata
 from urllib.parse import urlparse
@@ -138,7 +139,7 @@ def proxy_dict(proxy):
 
 
 def proxy_env(proxy):
-    """Environment for child processes (wget, curl, yt-dlp, ...)."""
+    """Environment for child processes (yt-dlp and other custom handlers)."""
     env = dict(os.environ)
     if proxy:
         for key in ("http_proxy", "https_proxy", "all_proxy"):
@@ -318,6 +319,131 @@ def get_date(line):
     return date
 
 
+def _content_length(header_file):
+    """
+    Total size from the headers curl saved (-D). With redirects and retries
+    the file holds several responses; only a final 2xx response describes the
+    download (a redirect's own small body must not be mistaken for it).
+    """
+    try:
+        with open(header_file, errors="replace") as f:
+            blocks = [b for b in re.split(r"\r?\n\r?\n", f.read())
+                      if b.strip().upper().startswith("HTTP/")]
+    except OSError:
+        return None
+    for block in reversed(blocks):
+        lines = block.strip().splitlines()
+        parts = lines[0].split()
+        if len(parts) < 2 or not parts[1].startswith("2"):
+            continue  # a redirect or an error: keep looking back
+        for line in lines[1:]:
+            if line.lower().startswith("content-length:"):
+                try:
+                    return int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    return None
+        return None
+    return None
+
+
+def _human(n):
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return "{:.0f} {}".format(n, unit) if unit == "B" else \
+                "{:.1f} {}".format(n, unit)
+        n /= 1024.0
+
+
+def _report(label, done, total, bps, tty, machine):
+    """
+    Show download progress. `machine` (set by the web UI) prints parseable
+    "[progress]" lines; a terminal gets one self-updating line; anything else
+    (cron, pipes) stays quiet.
+    """
+    if machine:
+        print("[progress] name={} done={} total={} bps={}".format(
+            label.replace(" ", "_"), done, total or 0, int(bps)), flush=True)
+    elif tty:
+        pct = " {:3.0f}%".format(100.0 * done / total) if total else ""
+        eta = ""
+        if total and bps > 0:
+            eta = "  ETA {}s".format(int((total - done) / bps))
+        sys.stdout.write("\r{}{}  {} / {}  {}/s{}   ".format(
+            label[:40], pct, _human(done), _human(total) if total else "?",
+            _human(bps), eta))
+        sys.stdout.flush()
+
+
+def curl_download(url, dest, proxy=None, label=None, retries=3):
+    """
+    Download `url` to `dest` with curl. The data goes to dest + ".part" and is
+    renamed only on success, so an interrupted download never leaves a file
+    that looks finished. Raises RuntimeError on failure (curl's message
+    included). Progress is measured from the growing file and the size curl
+    reports in the response headers, so it does not depend on curl's own
+    progress meter (whose format varies between versions).
+    """
+    curl = shutil.which("curl")
+    if not curl:
+        raise RuntimeError("curl is required but was not found on PATH")
+    label = label or os.path.basename(dest)
+    part, hdr = dest + ".part", dest + ".hdr"
+    cmd = [curl, "-fL", "--retry", str(retries), "--retry-delay", "5",
+           "-sS", "-D", hdr, "-o", part]
+    if proxy:
+        cmd += ["--proxy", proxy]
+    cmd.append(url)
+    machine = os.environ.get("GREG_PROGRESS") == "1"
+    tty = getattr(sys.stdout, "isatty", lambda: False)()
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE)
+    last_size, last_time, last_report, bps, total = 0, time.time(), 0, 0.0, None
+    try:
+        while proc.poll() is None:
+            time.sleep(0.5)
+            now = time.time()
+            total = _content_length(hdr)  # re-read: redirects arrive first
+            try:
+                size = os.path.getsize(part)
+            except OSError:
+                size = 0
+            if now - last_time >= 1 or (bps == 0 and size):
+                inst = max(size - last_size, 0) / max(now - last_time, 0.1)
+                bps = inst if bps == 0 else 0.7 * bps + 0.3 * inst
+                last_size, last_time = size, now
+            if now - last_report >= 2 and size:
+                last_report = now
+                _report(label, size, total, bps, tty, machine)
+        err = proc.stderr.read().decode("utf-8", "replace").strip()
+    except BaseException:
+        proc.kill()
+        proc.wait()  # let go of the file before we try to delete it
+        _discard(part, hdr)
+        raise
+    if tty and not machine:
+        sys.stdout.write("\r" + " " * 78 + "\r")
+    if proc.returncode != 0:
+        _discard(part, hdr)
+        raise RuntimeError("curl failed (exit {}): {}".format(
+            proc.returncode, err or "no message"))
+    size = os.path.getsize(part)
+    if machine:
+        _report(label, size, size, 0, tty, machine)
+    os.replace(part, dest)
+    try:
+        os.remove(hdr)
+    except OSError:
+        pass
+
+
+def _discard(*paths):
+    for p in paths:
+        try:
+            os.remove(p)
+        except OSError:
+            pass
+
+
 def download_handler(feed, placeholders):
     import shlex
     """
@@ -332,18 +458,13 @@ def download_handler(feed, placeholders):
             placeholders.substitute(template), placeholders.filename)
         placeholders.fullpath = os.path.join(
             placeholders.directory, placeholders.filename)
-        with requests.get(placeholders.link,
-                          proxies=proxy_dict(feed.proxy)) as fin:
-            # check if request went ok
-            fin.raise_for_status()
-            # check if fullpath allready exists
-            while os.path.isfile(placeholders.fullpath):
-                placeholders.filename = placeholders.filename + '_'
-                placeholders.fullpath = os.path.join(
-                    placeholders.directory, placeholders.filename)
-            # write content to file
-            with open(placeholders.fullpath,'wb') as fout:
-                fout.write(fin.content)
+        # don't overwrite a file that is already there
+        while os.path.isfile(placeholders.fullpath):
+            placeholders.filename = placeholders.filename + '_'
+            placeholders.fullpath = os.path.join(
+                placeholders.directory, placeholders.filename)
+        curl_download(placeholders.link, placeholders.fullpath,
+                      proxy=feed.proxy, label=placeholders.filename)
     else:
         value_list = shlex.split(value)
         instruction_list = [placeholders.substitute(part) for

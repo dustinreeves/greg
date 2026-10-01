@@ -430,14 +430,30 @@ class Job:
         self.started = self.finished = None
         self.proc = None
         self.cancelled = False
+        self.progress = None  # latest download progress, if any
 
     def info(self, with_lines=False, offset=0):
         d = {"id": self.id, "label": self.label, "status": self.status,
              "created": self.created, "started": self.started,
-             "finished": self.finished, "nlines": len(self.lines)}
+             "finished": self.finished, "nlines": len(self.lines),
+             "progress": self.progress}
         if with_lines:
             d["lines"] = self.lines[offset:]
         return d
+
+
+def parse_progress(line):
+    """'[progress] name=x done=1 total=2 bps=3' -> dict (or None)."""
+    try:
+        f = dict(kv.split("=", 1) for kv in line.split()[1:])
+        done, total = int(f["done"]), int(f["total"])
+        bps = int(f["bps"])
+        return {"name": f.get("name", "").replace("_", " "),
+                "done": done, "total": total, "bps": bps,
+                "percent": round(100.0 * done / total, 1) if total else None,
+                "eta": int((total - done) / bps) if total and bps else None}
+    except (KeyError, ValueError):
+        return None
 
 
 class JobManager:
@@ -513,13 +529,16 @@ class JobManager:
                     buf = parts.pop()
                     for p in parts:
                         line = p.decode("utf-8", "replace").rstrip()
-                        if line and not PROGRESS_RE.match(line):
+                        if line.startswith("[progress] "):
+                            job.progress = parse_progress(line)
+                        elif line and not PROGRESS_RE.match(line):
                             job.lines.append(line)
                             if len(job.lines) > 5000:
                                 del job.lines[:1000]
                 if buf.strip():
                     job.lines.append(buf.decode("utf-8", "replace").rstrip())
                 rc = job.proc.wait()
+                job.progress = None
                 if rc:
                     failed = True
                     job.lines.append("(exit code {})".format(rc))
@@ -598,7 +617,7 @@ def schedules_from(settings):
 def worker_argv(greg, *rest):
     argv = [sys.executable, "-m", "greg.jobs"] + list(rest)
     # pass through the same config/data location as the web server uses
-    extra = []
+    extra = ["--progress"]
     if greg.args.get("configfile"):
         extra += ["--configfile", greg.args["configfile"]]
     if greg.args.get("datadirectory"):
