@@ -18,6 +18,9 @@ cd greg
 pip install --user .
 ```
 
+greg downloads with [curl](https://curl.se/), so it needs to be installed (it
+already is on current Windows, macOS and most Linux systems).
+
 Optional extras: `pip install --user ".[tagging]"` for ID3 tagging (EyeD3) and
 `".[socks]"` if you use a SOCKS proxy. On Windows, the terminal interface uses
 `windows-curses`, which is installed automatically.
@@ -166,12 +169,13 @@ You could also have a couple of types there, as in `mime = audio, video`; or
 any other type, `mime = torrent`, or whatever.
 
 Another useful thing that you can change in the config file is the download
-handler; Greg by default uses [requests](https://github.com/psf/requests), but
-you can use whatever you want.
+handler. Greg by default downloads with [curl](https://curl.se/) (which must be
+installed; it is on current Windows, macOS and nearly every Linux): to a
+temporary `.part` file that is renamed when the download is complete, with
+retries, and through your `proxy` if you set one. You can use something else if
+you need to, for example
 
-For example, you could put
-
-    downloadhandler = wget {link} -P {directory}
+    downloadhandler = yt-dlp {link} -o "{directory}/{date}_{filename}"
 
 in your local `greg.conf`. You can do all sorts of nice things with this. For
 example, when `check`ing a podcast, you don't need to download it, but maybe
@@ -182,7 +186,7 @@ just stream it, like this:
 If you want to ensure that the downloaded files are in chronological order, you
 can use placeholders to add the date at the beginning, like this:
 
-    downloadhandler = wget {link} -O {directory}/{date}_{filename}
+    download_filename = {date}_{filename}
 
 One last thing: if you subscribe to a very active feed, and you are only
 interested in some of the entries, you can filter the feed. For example, if you

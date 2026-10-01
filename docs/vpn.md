@@ -21,10 +21,10 @@ proxy_hosts = patreon.com          # optional: only feeds on these hosts use it
   subdomains) use the `[DEFAULT]` proxy. Without it, every feed does.
 * A feed section can set its own: `[myfeed]` + `proxy = http://...`. An empty
   `proxy =` there forces that feed to connect directly.
-* The proxy is used for fetching the feed and for greg's own downloader. For a
-  custom `downloadhandler` (wget, curl, yt-dlp...), it is passed in the
-  environment (`http_proxy`, `https_proxy`, `all_proxy`) and as `{proxy}`.
-  **wget only understands HTTP proxies**, not SOCKS; use an HTTP proxy, or curl.
+* The proxy is used for fetching the feed and for greg's downloader, which is
+  curl (`http://` and `socks5h://` proxies both work). A custom `downloadhandler`
+  (yt-dlp, for example) gets it in the environment (`http_proxy`, `https_proxy`,
+  `all_proxy`) and as `{proxy}`.
 * If the proxy is down, the feed fails. greg never falls back to a direct
   connection.
 * `socks5://` proxies need the `socks` extra: `pip install "greg[socks]"`.

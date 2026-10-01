@@ -1,8 +1,8 @@
 FROM python:3.12-slim
 
-# wget/curl are there for people who use them as custom download handlers
+# curl does all the downloading
 RUN apt-get update \
- && apt-get install -y --no-install-recommends wget curl ca-certificates tini \
+ && apt-get install -y --no-install-recommends curl ca-certificates tini \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src

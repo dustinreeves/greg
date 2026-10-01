@@ -123,6 +123,14 @@ function bytes(n) {
   while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
   return n.toFixed(i ? 1 : 0) + " " + u[i];
 }
+function progressBar(p) {
+  if (!p) return "";
+  const eta = p.eta != null ? "  ETA " + (p.eta >= 60 ? Math.round(p.eta / 60) + "m" : p.eta + "s") : "";
+  return h("div", {style: "margin-top:4px;min-width:200px"},
+    p.percent != null ? h("meter", {min: 0, max: 100, value: p.percent, style: "width:100%"}) : "",
+    h("div", {class: "hint"}, (p.name || "") + "  " + (p.percent != null ? p.percent + "%  " : "") +
+      bytes(p.done) + (p.total ? " / " + bytes(p.total) : "") + "  " + bytes(p.bps) + "/s" + eta));
+}
 function ts(t) { return t ? new Date(t * 1000).toLocaleString() : ""; }
 
 // ---- dialog
@@ -265,7 +273,7 @@ async function viewJobs() {
       h("thead", {}, h("tr", {}, h("th", {}, "Job"), h("th", {}, "Status"), h("th", {}, "Started"), h("th", {}, ""))),
       h("tbody", {}, jobs.map(j => h("tr", {},
         h("td", {}, j.label),
-        h("td", {class: {done: "ok", failed: "bad", cancelled: "mute"}[j.status] || ""}, j.status),
+        h("td", {class: {done: "ok", failed: "bad", cancelled: "mute"}[j.status] || ""}, j.status, progressBar(j.progress)),
         h("td", {}, ts(j.started || j.created)),
         h("td", {class: "act"},
           h("button", {class: "btn", onclick: () => showJob(j.id)}, "Log"),
@@ -286,6 +294,7 @@ function showJob(id) {
   clearInterval(logTimer);
   const pre = h("pre", {class: "log"});
   const title = h("strong", {}, "…");
+  const prog = h("div", {});
   const closeb = h("button", {class: "btn", onclick: () => { openJob = null; clearInterval(logTimer); viewJobs(); }}, "Hide");
   let offset = 0;
   async function poll() {
@@ -295,11 +304,12 @@ function showJob(id) {
       if (j.lines.length) { pre.append(document.createTextNode(j.lines.join("\n") + "\n")); offset += j.lines.length; }
       if (stick) pre.scrollTop = pre.scrollHeight;
       title.textContent = j.label + " — " + j.status;
+      prog.replaceChildren(progressBar(j.progress));
       if (!["queued", "running"].includes(j.status)) clearInterval(logTimer);
     } catch (e) { clearInterval(logTimer); title.textContent = "Job not found"; }
   }
   const wrap = () => document.getElementById("logbox");
-  const mount = () => { const b = wrap(); if (b) b.replaceChildren(h("div", {class: "bar"}, title, closeb), pre); else setTimeout(mount, 50); };
+  const mount = () => { const b = wrap(); if (b) b.replaceChildren(h("div", {class: "bar"}, title, closeb), prog, pre); else setTimeout(mount, 50); };
   mount(); poll(); logTimer = setInterval(poll, 1200);
 }
 

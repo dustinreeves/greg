@@ -45,6 +45,8 @@ def parse_common(argv):
             args["configfile"] = next(it)
         elif a == "--datadirectory":
             args["datadirectory"] = next(it)
+        elif a == "--progress":
+            os.environ["GREG_PROGRESS"] = "1"  # parseable progress lines
         else:
             rest.append(a)
     return args, rest

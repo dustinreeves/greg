@@ -7,9 +7,8 @@ pkgdesc="A command-line podcast aggregator."
 arch=(any)
 url="https://github.com/manolomartinez/greg"
 license=('GPL')
-depends=('python-feedparser')
+depends=('python-feedparser' 'curl')
 optdepends=('python3-stagger-svn: writing metadata'
-  'wget: alternative downloadhandler'
 	'aria2: alternative downloadhandler')
 makedepends=('python-setuptools')
 source=("https://github.com/manolomartinez/greg/archive/${pkgver}.tar.gz")
