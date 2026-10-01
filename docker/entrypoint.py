@@ -14,6 +14,8 @@ Nothing already on the volumes is ever overwritten, so edit the files there
   GREG_PROXY              proxy url for feeds, e.g. http://gluetun:8888
   GREG_PROXY_HOSTS        only feeds on these hosts use it, e.g. patreon.com
   GREG_SYNC_EVERY_MINUTES schedule a sync of all feeds (handled by greg web)
+  GREG_REQUIRE_MOUNTS     comma-separated mount points that must be mounted
+                          before any job runs (e.g. a NAS or rclone mount)
 """
 import json
 import os
@@ -67,6 +69,8 @@ def make_web_json():
         "password_hash": hash_password(password),
         "min_password_length": MIN_LEN,
         "trust_proxy": os.environ.get("GREG_TRUST_PROXY", "") == "1",
+        "require_mounts": [m.strip() for m in os.environ.get(
+            "GREG_REQUIRE_MOUNTS", "").split(",") if m.strip()],
         "allowed_hosts": [h.strip() for h in os.environ.get(
             "GREG_ALLOWED_HOSTS", "").split(",") if h.strip()],
     }
